@@ -24,7 +24,7 @@ import logging
 import math
 from typing import Any
 
-from inspect_ai.hooks import Hooks, TaskEnd, hooks
+from inspect_ai.hooks import Hooks, SampleEnd, TaskEnd, hooks
 
 from agentic_evals.agents.trace_callback import TRACE_KEY
 
@@ -200,6 +200,19 @@ def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
     return rows
 
 
+def samples_for_table(log_samples: Any, collected: list[Any]) -> list[Any]:
+    """Samples to put in the trace table.
+
+    The task-end log often carries results without the sample bodies (they
+    stay in the ``.eval`` zip until something reads them). ``on_sample_end``
+    has already handed us each ``EvalSample``, store and scores included, so
+    that list is the one the table uses when it is non-empty.
+    """
+    if collected:
+        return list(collected)
+    return list(log_samples or [])
+
+
 def _as_table(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> Any:
     import wandb
 
@@ -207,7 +220,7 @@ def _as_table(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> Any:
     return wandb.Table(columns=list(columns), data=data)
 
 
-def publish(run: Any, log: Any) -> None:
+def publish(run: Any, log: Any, samples: Any = None) -> None:
     """Write summary scalars and both tables onto an open ``wandb.Run``."""
     results = getattr(log, "results", None)
     scores = list(getattr(results, "scores", None) or [])
@@ -219,11 +232,13 @@ def publish(run: Any, log: Any) -> None:
     summary = summary_metrics(scores, benchmark)
     for key, value in summary.items():
         run.summary[key] = value
+    if samples is None:
+        samples = getattr(log, "samples", None)
     run.log(
         {
             **summary,
             RESULTS_KEY: _as_table(RESULTS_COLUMNS, results_rows(scores, benchmark)),
-            SAMPLES_KEY: _as_table(SAMPLE_COLUMNS, sample_rows(getattr(log, "samples", None))),
+            SAMPLES_KEY: _as_table(SAMPLE_COLUMNS, sample_rows(samples)),
         }
     )
 
@@ -233,6 +248,15 @@ def publish(run: Any, log: Any) -> None:
     description="Log shared summary metrics and trace tables onto the W&B run.",
 )
 class WandbCompare(Hooks):
+    async def on_sample_end(self, data: SampleEnd) -> None:
+        # The finished log passed to on_task_end does not always include
+        # sample bodies. Keep the ones SampleEnd already has.
+        collected = getattr(self, "_samples", None)
+        if collected is None:
+            collected = {}
+            self._samples = collected
+        collected.setdefault(data.eval_id, []).append(data.sample)
+
     async def on_task_end(self, data: TaskEnd) -> None:
         # inspect-wandb opens the run in on_task_start and finishes it in
         # on_run_end, so the run is still open here.
@@ -243,7 +267,12 @@ class WandbCompare(Hooks):
         run = wandb.run
         if run is None:
             return
+        collected = getattr(self, "_samples", {}).pop(data.eval_id, [])
         try:
-            publish(run, data.log)
+            publish(
+                run,
+                data.log,
+                samples_for_table(getattr(data.log, "samples", None), collected),
+            )
         except Exception:
             logger.exception("W&B comparison tables were not logged")

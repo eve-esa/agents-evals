@@ -11,6 +11,7 @@ from agentic_evals.wandb_compare import (
     SAMPLE_COLUMNS,
     results_rows,
     sample_rows,
+    samples_for_table,
     summary_metrics,
 )
 
@@ -92,3 +93,11 @@ def test_sample_trace_table() -> None:
     assert rows[0]["length_diff"] == 0.0
     assert rows[0]["n_tool_calls"] == 2
     assert rows[0]["tool_trace"] == "get_osm_data -> buffer"
+
+
+def test_sample_end_records_fill_an_empty_task_log() -> None:
+    collected = [SimpleNamespace(id="task-1")]
+    assert samples_for_table(None, collected) == collected
+    assert samples_for_table([], collected) == collected
+    logged = [SimpleNamespace(id="from-log")]
+    assert samples_for_table(logged, []) == logged
