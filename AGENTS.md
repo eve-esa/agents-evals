@@ -231,6 +231,7 @@ src/agentic_evals/
   tooling.py              task <-> agent contract: tasks publish MCP server configs into the sample store
   run_identity.py         setup solver: records what the endpoint's /v1/models reports
   max_tokens.py           `--max-tokens -1` is recorded on the eval and omitted from the provider request
+  wandb_compare.py        task-end hook: shared summary keys plus results and trace tables on the W&B run
   agents/                 benchmark-agnostic agents (Inspect solvers)
     langgraph_react.py    LangGraph ReAct agent via agent_bridge(); MCP tools from tooling.mcp_servers()
     trace_callback.py     LangChain callback writing our tool-call trace into the sample store
@@ -286,7 +287,7 @@ Experiments run on the pod `ssh root@157.157.221.177 -p 32257 -i ~/.ssh/id_ed255
 
 - **No output cap.** Pass `--max-tokens -1`. The value stays on the eval record and the provider request omits `max_tokens`, so the only ceiling is the endpoint's own context window (`src/agentic_evals/max_tokens.py`). A positive `--max-tokens` is a hard cap. `inspect eval-retry` keeps the cap stored in the log it resumes; apply `-1` by starting a new eval.
 - **Viewer forwarding.** On the pod, run `inspect view --log-dir <log-dir> --host 127.0.0.1 --port 7575` and leave it up. From the local machine, forward that port for the whole run: `ssh -N -L 7575:127.0.0.1:7575 -p 32257 -i ~/.ssh/id_ed25519 root@157.157.221.177`. Open `http://127.0.0.1:7575`. Bind to `127.0.0.1`: Inspect rejects a browser Origin of https when the server is plain HTTP, so the Runpod HTTPS proxy is not the viewer.
-- **W&B stays on.** `inspect-wandb` mirrors the run (project `agentic-evals`). The `.eval` log remains the source of truth. `[tool.inspect-wandb.models] enabled` in `pyproject.toml` stays `true`, and the pod has `WANDB_API_KEY` and `WANDB_ENTITY`. Leave the Weave integration off while it crashes model calls.
+- **W&B stays on.** `inspect-wandb` mirrors the run to Forge project `LLM4EO/evaluations_eo` (`https://forge.coreweave.com/wandb`). The `.eval` log remains the source of truth. `[tool.inspect-wandb.models]` in `pyproject.toml` stays enabled with that entity and project. On the pod, `WANDB_BASE_URL` is `https://forge.coreweave.com/wandb`; `WANDB_API_KEY` authenticates and is not committed. At task end, `wandb_compare` writes shared summary keys (`geobenchx/tao`, `tio`, `tem`, `param_acc`, `match`, `length_diff` when the log has those scores), the `evaluation/eval_results` table, and the `evaluation/samples` trace table onto that run, which is what makes a workspace comparison appear when several runs are selected. Leave the Weave integration off while it crashes model calls.
 
 - `-M strict_tools=false`: Inspect's `openai-api` provider marks tools strict by default, and upstream tool schemas contain untyped arguments that OpenAI's strict mode rejects.
 - Add whole-trajectory LLM judges with `-T trajectory_judges=openai/gpt-4.1-mini,<other>`; compare verdicts with `uv run python -m agentic_evals.scorers.agreement <log> --verdict <scorer>:<key> ...`.

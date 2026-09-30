@@ -31,15 +31,18 @@ dev = [
     "pytest>=9.1.1",
 ]
 
-# inspect-wandb mirrors every eval (project agentic-evals). The .eval log remains
-# the source of truth. Models logging stays on. Weave stays off while its OpenAI
-# patch crashes model calls. The pod needs WANDB_API_KEY and WANDB_ENTITY.
+# inspect-wandb mirrors every eval to the Forge project the older harness used.
+# The .eval log remains the source of truth. Models logging stays on. Weave stays
+# off while its OpenAI patch crashes model calls. On the pod, WANDB_BASE_URL is
+# https://forge.coreweave.com/wandb. WANDB_API_KEY is not committed.
 [tool.inspect-wandb.models]
-project = "agentic-evals"
+entity = "LLM4EO"
+project = "evaluations_eo"
 enabled = true
 
 [tool.inspect-wandb.weave]
-project = "agentic-evals"
+entity = "LLM4EO"
+project = "evaluations_eo"
 enabled = false
 
 [tool.pytest.ini_options]

@@ -8,6 +8,7 @@ Anything imported here is addressable by name, e.g.
 
 from agentic_evals.agents.langgraph_react import langgraph_react
 from agentic_evals.max_tokens import UncappedMaxTokens as _uncapped_max_tokens
+from agentic_evals.wandb_compare import WandbCompare as _wandb_compare
 from agentic_evals.openai_compat import install as _install_openai_compat
 from agentic_evals.scorers.judges import trajectory_judge
 from agentic_evals.tasks.earth_bench.scorers import earth_bench_scorer
