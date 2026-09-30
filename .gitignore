@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Upstream benchmarks are fetched by scripts/fetch_upstream.py, never committed.
+third_party/
+
+# Inspect logs and per-sample tool outputs.
+logs/
+runs/
+
+# Local W&B run directories. The inspect-wandb integration stays on; these files are not the record.
+wandb/
+
+.env

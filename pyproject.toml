@@ -1,0 +1,49 @@
+[project]
+name = "agentic-evals"
+version = "0.1.0"
+description = "Evaluation harness for Earth Observation agents (EVE), built on Inspect AI."
+authors = [
+    { name = "elements72", email = "antonio.lopez.8523@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "agentevals>=0.0.9",
+    "httpx>=0.28.1",
+    "huggingface-hub>=2.0.0",
+    "inspect-ai>=0.3.268",
+    "inspect-wandb[weave]>=0.3.0",
+    "langchain>=1.4.2",
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-openai>=1.6.6",
+    "langgraph>=1.2.12",
+    "mcp>=1.30.0",
+]
+
+[project.entry-points.inspect_ai]
+agentic_evals = "agentic_evals._registry"
+
+[build-system]
+requires = ["uv_build>=0.10.12,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+# inspect-wandb mirrors every eval (project agentic-evals). The .eval log remains
+# the source of truth. Models logging stays on. Weave stays off while its OpenAI
+# patch crashes model calls. The pod needs WANDB_API_KEY and WANDB_ENTITY.
+[tool.inspect-wandb.models]
+project = "agentic-evals"
+enabled = true
+
+[tool.inspect-wandb.weave]
+project = "agentic-evals"
+enabled = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "upstream: needs the pinned Earth-Agent checkout in third_party/ (run scripts/fetch_upstream.py)",
+]

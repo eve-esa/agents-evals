@@ -1,0 +1,44 @@
+# Earth-Bench smoke run: Qwen3-32B via OpenRouter.
+#
+# Qwen3-32B is the smallest model in Feng et al., Earth-Agent (ICLR 2026),
+# Table 7 (qwen3-32b, 32.8B dense). On OpenRouter it is qwen/qwen3-32b at
+# $0.08 / $0.28 per 1M input/output tokens (https://openrouter.ai/qwen/qwen3-32b).
+# Their runner (scripts/langchain_qwen3_32B_autoplan.py, agent/config_qwen3.json)
+# uses temperature 0.1 and enable_thinking: false. OpenRouter's equivalent of
+# that switch is reasoning.enabled (https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+#
+# Only questions 1-5 have rasters under third_party/Earth-Agent/benchmark/data/.
+# Spectrum is questions 1-100; do not drop sample_id until more data is fetched.
+#
+# Key (not stored here). Inspect reads .env from this directory:
+#   cp .env.example .env
+# then:
+#   uv run inspect eval --run-config configs/earth_bench_qwen3_32b.yaml
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: spectrum
+
+model:
+  model: openai-api/openrouter/qwen/qwen3-32b
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  # 40960 is DeepInfra's whole context window, not the output budget. The
+  # tool schemas already occupy ~26k tokens, so max_tokens must be the room
+  # left for one reply. 2048 is enough for a tool call.
+  max_tokens: 2048
+  max_retries: 5
+  extra_body:
+    reasoning:
+      enabled: false
+
+eval_config:
+  sample_id: [1, 2, 3, 4, 5]
+  epochs: 1
+  max_samples: 1

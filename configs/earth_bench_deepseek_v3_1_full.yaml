@@ -1,0 +1,46 @@
+# Earth-Bench full Auto-Planning run: DeepSeek-V3.1 via OpenRouter, thinking on.
+#
+# Feng et al., Earth-Agent (ICLR 2026), Table 7 used enable_thinking: false.
+# This run turns thinking on and gives the model its full completion budget so
+# it can reason before each tool call. OpenRouter lists the cap at 32,768
+# completion tokens inside a 163,840 context window
+# (https://openrouter.ai/deepseek/deepseek-chat-v3.1). A larger max_tokens is
+# rejected. Reasoning is the `reasoning.enabled` switch
+# (https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+#
+# modality all includes RGB (questions 189-248). Those samples are left
+# unscored unless Perception's lookup exists at the path hardcoded in
+# agent/tools/Perception.py (/root/autodl-tmp/Earth-Agent/benchmark/model_results.csv).
+# Spectrum and Products do not need it.
+#
+# max_samples 8 runs eight questions at once. The pod cgroup is 16 GB and one
+# question's five tool servers use about 1 GB, so eight leaves headroom for
+# raster spikes. The pod has 4 CPUs.
+#
+#   uv run inspect eval --run-config configs/earth_bench_deepseek_v3_1_full.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: all
+
+model:
+  model: openai-api/openrouter/deepseek/deepseek-chat-v3.1
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: 32768
+  max_retries: 5
+  extra_body:
+    reasoning:
+      enabled: true
+
+eval_config:
+  epochs: 1
+  max_samples: 8
+  # One broken task must not abort the others.
+  fail_on_error: false

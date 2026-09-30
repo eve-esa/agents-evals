@@ -1,0 +1,45 @@
+# Earth-Bench full Auto-Planning run: Llama 4 Maverick via OpenRouter.
+#
+# Feng et al., Earth-Agent (ICLR 2026), Table 7. Their runner
+# (scripts/langchain_llama4_autoplan.py, agent/config_llama4.json) sets
+# temperature 0.1 and leaves generate_args empty, so this config sends no
+# reasoning switch.
+#
+# Maverick is a mixture-of-experts model: 400B total, 17B active
+# (https://openrouter.ai/meta-llama/llama-4-maverick). Report both. It is not
+# a size match for EVE-Instruct's 24B dense checkpoint.
+#
+# Listed price is $0.1875 / $0.6525 per 1M input/output tokens, the cheapest
+# Table 7 model whose window fits a ~28k-token tool prompt. The completion cap
+# on the model card is 16,384. Tool calls are routed to the providers that
+# implement them (DigitalOcean 128k, Parasail 524k, Google Vertex 524k). No
+# provider is pinned, so a rate limit can fail over
+# (https://openrouter.ai/docs/guides/routing/provider-selection).
+#
+# max_samples 8 runs eight questions at once. The pod cgroup is 16 GB and one
+# question's five tool servers use about 1 GB. The pod has 4 CPUs.
+#
+#   uv run inspect eval --run-config configs/earth_bench_llama4_maverick_full.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: all
+
+model:
+  model: openai-api/openrouter/meta-llama/llama-4-maverick
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: 16384
+  max_retries: 5
+
+eval_config:
+  epochs: 1
+  max_samples: 8
+  # One broken task must not abort the others.
+  fail_on_error: false

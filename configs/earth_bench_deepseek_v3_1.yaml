@@ -1,0 +1,41 @@
+# Earth-Bench smoke run: DeepSeek-V3.1 via OpenRouter.
+#
+# DeepSeek-V3.1 is in Feng et al., Earth-Agent (ICLR 2026), Table 7. It is a
+# 671B-total / 37B-active MoE, so it is not size-matched to EVE-Instruct's 24B
+# dense checkpoint; report the active count alongside the total. Their runner
+# (scripts/langchain_deepseek_autoplan.py, agent/config_deepseek.json) uses
+# temperature 0.1, recursion_limit 50, and enable_thinking: false. OpenRouter's
+# switch for that is reasoning.enabled
+# (https://openrouter.ai/deepseek/deepseek-chat-v3.1).
+#
+# Listed price: $0.25 / $0.95 per 1M input/output tokens. Context window is
+# 163,840 tokens, so the ~28k-token tool schemas fit with max_tokens 2048.
+#
+# Only questions 1-5 have rasters under third_party/Earth-Agent/benchmark/data/.
+#
+#   uv run inspect eval --run-config configs/earth_bench_deepseek_v3_1.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: spectrum
+
+model:
+  model: openai-api/openrouter/deepseek/deepseek-chat-v3.1
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: 2048
+  max_retries: 5
+  extra_body:
+    reasoning:
+      enabled: false
+
+eval_config:
+  sample_id: [1, 2, 3, 4, 5]
+  epochs: 1
+  max_samples: 1
