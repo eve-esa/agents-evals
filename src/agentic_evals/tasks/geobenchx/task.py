@@ -141,6 +141,7 @@ def geobenchx(
         ),
         metadata={
             "benchmark": "geobenchx",
+            "summary_groups": ["kind", "labels"],
             "group": group,
             "kind": kind,
             "task_id": task_id,

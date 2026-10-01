@@ -111,6 +111,7 @@ def eo_gym(
         config=GenerateConfig(temperature=0.3, max_tokens=2048),
         metadata={
             "benchmark": "eo_gym",
+            "summary_groups": ["question_type", "eo_task"],
             "prompt": prompt,
             "toolset": toolset,
             "tool_mode": tool_mode,

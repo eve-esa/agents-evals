@@ -287,7 +287,37 @@ Experiments run on the pod `ssh root@157.157.221.177 -p 32257 -i ~/.ssh/id_ed255
 
 - **No output cap.** Pass `--max-tokens -1`. The value stays on the eval record and the provider request omits `max_tokens`, so the only ceiling is the endpoint's own context window (`src/agentic_evals/max_tokens.py`). A positive `--max-tokens` is a hard cap. `inspect eval-retry` keeps the cap stored in the log it resumes; apply `-1` by starting a new eval.
 - **Viewer forwarding.** On the pod, run `inspect view --log-dir <log-dir> --host 127.0.0.1 --port 7575` and leave it up. From the local machine, forward that port for the whole run: `ssh -N -L 7575:127.0.0.1:7575 -p 32257 -i ~/.ssh/id_ed25519 root@157.157.221.177`. Open `http://127.0.0.1:7575`. Bind to `127.0.0.1`: Inspect rejects a browser Origin of https when the server is plain HTTP, so the Runpod HTTPS proxy is not the viewer.
-- **W&B stays on.** `inspect-wandb` mirrors the run to Forge project `LLM4EO/evaluations_eo`. The workspace UI is `https://forge.coreweave.com/wandb`. The `.eval` log remains the source of truth. `[tool.inspect-wandb.models]` in `pyproject.toml` stays enabled with that entity and project. On the pod, `WANDB_BASE_URL` is `https://forge.coreweave.com/api/wandb` and `WANDB_APP_URL` is `https://forge.coreweave.com/wandb`. The UI host rejects the GraphQL POST the client sends (`405 Method Not Allowed`); the API host is the one Forge's own shell config names as `BACKEND_HOST`. `WANDB_API_KEY` authenticates and is not committed. At task end, `wandb_compare` writes shared summary keys (`geobenchx/tao`, `tio`, `tem`, `param_acc`, `match`, `length_diff` when the log has those scores), the `evaluation/eval_results` table, and the `evaluation/samples` trace table onto that run, which is what makes a workspace comparison appear when several runs are selected. Leave the Weave integration off while it crashes model calls.
+- **W&B stays on.** `inspect-wandb` mirrors the run to Forge project `LLM4EO/evaluations_eo`. The workspace UI is `https://forge.coreweave.com/wandb`. The `.eval` log remains the source of truth. `[tool.inspect-wandb.models]` in `pyproject.toml` stays enabled with that entity and project. On the pod, `WANDB_BASE_URL` is `https://forge.coreweave.com/api/wandb` and `WANDB_APP_URL` is `https://forge.coreweave.com/wandb`. The UI host rejects the GraphQL POST the client sends (`405 Method Not Allowed`); the API host is the one Forge's own shell config names as `BACKEND_HOST`. `WANDB_API_KEY` authenticates and is not committed. At task end, `wandb_compare` writes the summary keys and the two tables described under **W&B summary format**. The same keys on every model are what makes a workspace comparison appear when several runs are selected. Leave the Weave integration off while it crashes model calls.
+
+### W&B summary format
+
+`{benchmark}` is task metadata `benchmark`, otherwise the last segment of the task name. Future tasks use this layout. Omit a key the log does not have.
+
+- `{benchmark}/tao`, `tio`, `tem`, `param_acc` — mean of that step score.
+- `{benchmark}/match` — mean of the per-sample merged match (`merged/match`) when that row exists. Otherwise the mean of the judge means below.
+- `{benchmark}/length_diff` — mean of the `*/length_diff` rows.
+- `{benchmark}/llm_as_judge/{model}` — that judge's mean match. `{model}` is the score-row id with `/match` removed and any remaining `/` replaced by `_` (`qwen/qwen3.8-27b/match` → `llm_as_judge/qwen_qwen3.8-27b`).
+- `{benchmark}/llm_as_judge_{model}` and `{benchmark}/llm_as_judge_avg` — the same means, with an underscore. The agents workspace charts this shape (`open_ended/llm_as_judge_avg`). The slash form stays for the detailed block.
+- `{benchmark}/llm_as_judge/avg` — unweighted arithmetic mean of the `{model}` means just listed. Each reported judge counts once. This is not a vote and not a second pass over samples. It equals `{benchmark}/match` when every judge scored every sample.
+- `{benchmark}/llm_as_judge/n_judges` — how many means went into `avg`.
+- Under each judge, when the log has them: `stderr`, `median`, `ci_lower`, `ci_upper`, and `success`, `partial`, `no_match` (shares of match 2, 1, and 0; GeoBenchX `generate_eval_stats`).
+- `{benchmark}/llm_as_judge/{model}/n` — `scored_samples`. `n_success`, `n_partial`, and `n_no_match` are `round(share * n)`, because the scorer stores shares rather than counts.
+
+When a task classifies its samples, the same block is repeated for each class. Task metadata `summary_groups` names the sample-metadata fields. Keys are `{benchmark}/{label}/...` with the metrics above (`tao`, `match`, `length_diff`, `llm_as_judge/{model}`, `llm_as_judge/avg`, `n_judges`, and that judge's `n`, `median`, rates, and counts). `{label}` is the metadata value with spaces and punctuation turned into `_` (`Task Set 03` → `Task_Set_03`). The field name (`kind`, `labels`) is not part of the key.
+
+- A string field is one class per sample. GeoBenchX `kind` is `solvable`, `unsolvable`, or `control`, so the keys are `{benchmark}/solvable`, `{benchmark}/unsolvable`, and `{benchmark}/control`.
+- A list field counts the sample in every entry. GeoBenchX `labels` is the task group (`Spatial_operations`, `Task_Set_03`, and the other groups).
+- `{benchmark}/{label}/n` is how many samples carry that label. Inside a class, `n_success`, `n_partial`, and `n_no_match` count samples whose match is 2, 1, and 0.
+- The full-set block stays the run as a whole. The confidence interval stays there; a class repeats the means, the median, the rates, and the counts.
+- Earth-Bench declares `modality`. EO-Gym declares `question_type` and `eo_task`. A new task with a classification adds the field to `summary_groups` and writes it on every sample.
+
+The whole block is logged once: headline scores, each judge's mean and counts, and each class. Logging it again appends a history step, and the workspace draws a curve. The run name is the model checkpoint, the last segment of the model id (`qwen3.8-27b`). The agents workspace is currently filtered to `reasoning_mistral-small-2603`, so a run whose name does not match that search stays out of the view.
+
+Tables, same on every run, under the keys the workspace Tables section already reads:
+
+- `samples` — one row per task: question, final answer, and `transcript` (the conversation: user text, assistant text, each tool call with its arguments, each tool result, and the final answer). Scores and the tool-name chain are on the same row.
+- `metrics_summary` — task, metric, value, stderr, n.
+- A `{benchmark}-traces` artifact (`traces.json`) stores that transcript plus the tool calls for every sample.
 
 - `-M strict_tools=false`: Inspect's `openai-api` provider marks tools strict by default, and upstream tool schemas contain untyped arguments that OpenAI's strict mode rejects.
 - Add whole-trajectory LLM judges with `-T trajectory_judges=openai/gpt-4.1-mini,<other>`; compare verdicts with `uv run python -m agentic_evals.scorers.agreement <log> --verdict <scorer>:<key> ...`.

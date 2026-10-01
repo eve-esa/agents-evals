@@ -91,6 +91,7 @@ def earth_bench(
         config=GenerateConfig(temperature=0.1),
         metadata={
             "benchmark": "earth_bench",
+            "summary_groups": ["modality"],
             "regime": regime,
             "modality": modality,
             "answer_key": answer_key,
