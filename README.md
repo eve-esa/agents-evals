@@ -29,6 +29,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+The repository is private. `git clone` asks for a GitHub username and a personal access token unless this machine is already authenticated (`gh auth login`, or a credential helper).
+
 ```bash
 git clone https://github.com/eve-esa/agents-evals.git
 cd agents-evals
