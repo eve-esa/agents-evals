@@ -1,35 +1,53 @@
-"""Install one benchmark: pinned checkout, tool environment, and its data.
+"""Install one benchmark's data. Tool code for Earth-Bench and GeoBenchX is in this package.
 
 Pass the benchmark name. Nothing for the other benchmarks is downloaded.
 
+    uv sync --extra earth-bench
     uv run python scripts/setup_benchmark.py earth-bench
     uv run python scripts/setup_benchmark.py earth-bench --modality spectrum
-    uv run python scripts/setup_benchmark.py eo-gym
+    uv sync --extra geobenchx
     uv run python scripts/setup_benchmark.py geobenchx
+    uv run python scripts/setup_benchmark.py eo-gym
 
-Earth-Bench and GeoBenchX need a system GDAL (``gdal-config`` on ``PATH``).
 Earth-Bench without ``--modality`` or ``--questions`` downloads every task
-raster (16.6 GB). EO-Gym downloads and unpacks about 47 GB. GeoBenchX
-downloads the Google Drive archive linked from upstream ``data/README.md``.
+raster (16.6 GB) into ``data/earth_bench``. GeoBenchX downloads the Google
+Drive archive into ``data/geobenchx``. EO-Gym still fetches its checkout
+(~47 GB with data) under ``third_party/``; its tool server is not started.
 
-``--skip-data`` installs the checkout and the tool environment only. EO-Gym's
-``/execute`` server is not started by this script; run
-``third_party/EO-Gym/scripts/start_tool_server.sh`` after ``eo-gym``.
+``--skip-data`` does nothing for Earth-Bench and GeoBenchX, whose code is
+already installed, and skips EO-Gym's image archives. ``generate_contours_display``
+is the one GeoBenchX tool that still needs a system GDAL.
 """
 
 from __future__ import annotations
 
 import argparse
-import shutil
+import json
+import subprocess
 import sys
+import tomllib
 import zipfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import fetch_upstream as upstream  # noqa: E402
+import fetch_upstream  # noqa: E402
 
-from agentic_evals.paths import EO_GYM_ROOT  # noqa: E402
+from agentic_evals.paths import (  # noqa: E402
+    EARTH_BENCH_DATA,
+    EO_GYM_ROOT,
+    GEOBENCHX_DATA,
+)
+
+LOCK = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+MODALITY_QUESTIONS = {
+    "spectrum": range(1, 101),
+    "products": range(101, 189),
+    "rgb": range(189, 249),
+    "all": range(1, 249),
+}
 
 BENCHMARKS = ("earth-bench", "eo-gym", "geobenchx")
 # The Earth-Bench tools live in the Earth-Agent repo. Accept the old name.
@@ -42,11 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-data",
         action="store_true",
-        help="Checkout and tool environment only. Do not download rasters, imagery, or the Drive archive.",
+        help="Do not download rasters, imagery, or the Drive archive.",
     )
     parser.add_argument(
         "--modality",
-        choices=sorted(upstream.MODALITY_QUESTIONS),
+        choices=sorted(MODALITY_QUESTIONS),
         help="Earth-Bench only. Download rasters for this modality instead of all 248 tasks.",
     )
     parser.add_argument("--questions", help="Earth-Bench only. Task numbers to download, e.g. '1-5,101'.")
@@ -63,21 +81,31 @@ def earth_bench_questions(args: argparse.Namespace) -> list[int]:
         return []
     questions: list[int] = []
     if args.modality:
-        questions.extend(upstream.MODALITY_QUESTIONS[args.modality])
+        questions.extend(MODALITY_QUESTIONS[args.modality])
     if args.questions:
-        questions.extend(upstream.parse_questions(args.questions))
+        questions.extend(_parse_questions(args.questions))
     if not questions:
-        questions.extend(upstream.MODALITY_QUESTIONS["all"])
+        questions.extend(MODALITY_QUESTIONS["all"])
     return sorted(set(questions))
 
 
-def require_gdal() -> None:
-    if shutil.which("gdal-config") is None:
-        sys.exit(
-            "gdal-config not found. Earth-Bench and GeoBenchX import osgeo, which is built "
-            "against a system GDAL (macOS: `brew install gdal`; Debian/Ubuntu: "
-            "`apt-get install gdal-bin libgdal-dev`)."
-        )
+def _parse_questions(spec: str) -> list[int]:
+    out: list[int] = []
+    for part in spec.split(","):
+        if "-" in part:
+            lo, hi = part.split("-")
+            out.extend(range(int(lo), int(hi) + 1))
+        else:
+            out.append(int(part))
+    return out
+
+
+def _find_dir(root: Path, name: str) -> Path | None:
+    target = name.lower()
+    for path in root.rglob("*"):
+        if path.is_dir() and path.name.lower() == target:
+            return path
+    return None
 
 
 def unpack_eo_gym_archives(root: Path = EO_GYM_ROOT) -> None:
@@ -102,19 +130,28 @@ def unpack_eo_gym_archives(root: Path = EO_GYM_ROOT) -> None:
 
 
 def setup_earth_bench(args: argparse.Namespace) -> None:
-    require_gdal()
-    upstream.fetch_earth_agent_code()
-    upstream.build_earth_agent_venv()
     questions = earth_bench_questions(args)
     if not questions:
-        print("Earth-Bench rasters skipped (--skip-data).", flush=True)
+        print("Earth-Bench rasters skipped (--skip-data). Tool code is already in the package.", flush=True)
         return
+    from huggingface_hub import snapshot_download
+
+    spec = LOCK["earth_bench_data"]
+    target = EARTH_BENCH_DATA / "benchmark" / "data"
+    target.mkdir(parents=True, exist_ok=True)
     print(f"Downloading Earth-Bench rasters for {len(questions)} tasks.", flush=True)
-    upstream.fetch_earth_bench_data(questions)
+    snapshot_download(
+        repo_id=spec["repo_id"],
+        repo_type=spec["repo_type"],
+        revision=spec["revision"],
+        local_dir=target,
+        allow_patterns=[f"question{q}/*" for q in questions],
+    )
+    print(f"Rasters for {len(questions)} tasks in {target}", flush=True)
 
 
 def setup_eo_gym(args: argparse.Namespace) -> None:
-    upstream.fetch_eo_gym(with_data=not args.skip_data, build_venv=True)
+    fetch_upstream.fetch_eo_gym(with_data=not args.skip_data, build_venv=True)
     if args.skip_data:
         print("EO-Gym images skipped (--skip-data).", flush=True)
         return
@@ -126,10 +163,30 @@ def setup_eo_gym(args: argparse.Namespace) -> None:
 
 
 def setup_geobenchx(args: argparse.Namespace) -> None:
-    require_gdal()
-    upstream.fetch_geobenchx(build_venv=True, with_data=not args.skip_data)
     if args.skip_data:
-        print("GeoBenchX Drive archive skipped (--skip-data).", flush=True)
+        print("GeoBenchX Drive archive skipped (--skip-data). Tool code is already in the package.", flush=True)
+        return
+    spec = LOCK["geobenchx"]
+    GEOBENCHX_DATA.mkdir(parents=True, exist_ok=True)
+    dest = GEOBENCHX_DATA / "geobenchx_data.zip"
+    if not dest.exists():
+        subprocess.run(
+            ["uvx", "gdown", f"https://drive.google.com/uc?id={spec['drive_file_id']}", "-O", str(dest)],
+            check=True,
+        )
+    bundle = GEOBENCHX_DATA / "data_bundle"
+    if not bundle.exists():
+        with zipfile.ZipFile(dest) as archive:
+            bundle.mkdir(parents=True)
+            archive.extractall(bundle)
+    stat = _find_dir(bundle, "StatData")
+    geo = _find_dir(bundle, "Geodata")
+    if stat is None or geo is None:
+        sys.exit(f"Unpacked {dest} into {bundle}, but StatData and Geodata were not both found.")
+    pointer = GEOBENCHX_DATA / "data_paths.json"
+    pointer.write_text(json.dumps({"stat": str(stat.resolve()), "geo": str(geo.resolve())}, indent=2) + "\n")
+    print(f"StatData: {stat}", flush=True)
+    print(f"Geodata: {geo}", flush=True)
 
 
 def main(argv: list[str] | None = None) -> None:

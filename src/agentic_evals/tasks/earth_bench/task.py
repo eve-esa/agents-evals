@@ -31,7 +31,7 @@ from agentic_evals.run_identity import record_run_identity
 from agentic_evals.scorers.judges import extra_judges
 from agentic_evals.tasks.earth_bench.dataset import AnswerKey, Modality, Regime, earth_bench_dataset
 from agentic_evals.tasks.earth_bench.scorers import NOT_APPLICABLE_KEY, earth_bench_scorer
-from agentic_evals.tasks.earth_bench.tools import rgb_unavailable_reason, sample_servers
+from agentic_evals.tasks.earth_bench.tools import ported_code_sha256, rgb_unavailable_reason, sample_servers
 from agentic_evals.tooling import publish_mcp_servers
 
 
@@ -97,6 +97,7 @@ def earth_bench(
             "answer_key": answer_key,
             "upstream_compat": upstream_compat,
             "trajectory_judges": trajectory_judges,
+            "tools_sha256": ported_code_sha256(),
             **_upstream_revisions(),
         },
         version=1,

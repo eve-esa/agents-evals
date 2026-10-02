@@ -16,7 +16,40 @@ dependencies = [
     "langchain-mcp-adapters>=0.3.2",
     "langchain-openai>=1.6.6",
     "langgraph>=1.2.12",
-    "mcp>=1.30.0",
+    # mcp 2.x removed Server.list_tools / call_tool, which the GeoBenchX stdio server uses.
+    "mcp>=1.30.0,<2",
+]
+
+[project.optional-dependencies]
+earth-bench = [
+    # 2.11.3 is the fastmcp Earth-Agent's kits were written against, so the
+    # tool schemas the model sees stay the ones the published runs used.
+    "fastmcp==2.11.3",
+    "imageio>=2.37",
+    "matplotlib>=3.10",
+    "numpy>=2",
+    "opencv-python-headless>=4.10",
+    "pandas>=2.2",
+    "pillow>=11",
+    "pyproj>=3.7",
+    "rasterio>=1.4",
+    "ruptures>=1.1",
+    "scikit-image>=0.25",
+    "scikit-learn>=1.6",
+    "scipy>=1.15",
+    "statsmodels>=0.14",
+]
+geobenchx = [
+    "contextily>=1.6",
+    "gdown>=5.2",
+    "geopandas>=1.0",
+    "matplotlib>=3.10",
+    "numpy>=2",
+    "pandas>=2.2",
+    "plotly>=6",
+    "pyproj>=3.7",
+    "rasterio>=1.4",
+    "shapely>=2.0",
 ]
 
 [project.entry-points.inspect_ai]

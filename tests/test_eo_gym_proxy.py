@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from agentic_evals.paths import EO_GYM_TOOLS_JSON
-from agentic_evals.tasks.eo_gym.mcp_proxy import execute_output, new_image_ref
+from agentic_evals.tasks.eo_gym.tools.mcp_proxy import execute_output, new_image_ref
 from agentic_evals.tasks.eo_gym.tools import proxy_servers
 
 CALLS: list[dict] = []

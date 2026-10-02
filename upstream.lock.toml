@@ -8,29 +8,6 @@
 repo = "https://github.com/opendatalab/Earth-Agent.git"
 rev = "ca1dfaef750654331308a434966d307f1728fd90"
 
-[earth_agent.tools_env]
-# The kits run unmodified in their own venv. Versions follow the upstream
-# requirements.txt pins for the packages the kits import; numpy 1.24 caps the
-# interpreter at 3.11. osgeo.gdal is built against the system GDAL
-# (gdal-config must be on PATH) at the same version.
-python = "3.11"
-packages = [
-    "fastmcp==2.11.3",
-    "numpy==1.24.4",
-    "scipy==1.15.3",
-    "pandas==2.3.1",
-    "scikit-learn==1.7.1",
-    "scikit-image==0.25.2",
-    "statsmodels==0.14.5",
-    "pyproj==3.7.1",
-    "opencv-python==4.8.1.78",
-    "rasterio==1.4.3",
-    "ruptures",
-    "matplotlib==3.10.5",
-    "pillow==11.3.0",
-    "imageio==2.37.0",
-]
-
 [earth_bench_data]
 # GeoTIFF rasters, one directory per task (question1/ .. question248/).
 repo_id = "Sssunset/Earth-Bench"
@@ -67,34 +44,3 @@ repo = "https://github.com/Solirinai/GeoBenchX.git"
 rev = "0edf6109ea5dca3e70fdfe081d39c9ccd0f832fb"
 drive_file_id = "10hLDCTMnaMAXyUCxFjUt4iK7tX9XyXZu"
 
-[geobenchx.tools_env]
-# The tools run unmodified in their own venv. geobenchx/tools.py imports
-# geopandas, rasterio, and osgeo; osgeo.gdal is built against the system GDAL
-# (gdal-config must be on PATH) at the same version. numpy 2 needs Python >= 3.12,
-# which is also what geopandas' current wheels require. Do not install upstream's
-# requirements.txt: it lists stdlib modules and unpinned names.
-python = "3.12"
-packages = [
-    "numpy==2.5.3",
-    "pandas==3.0.6",
-    "geopandas==1.1.4",
-    "shapely==2.1.2",
-    "pyproj==3.8.0",
-    "rasterio==1.5.1",
-    "matplotlib==3.11.2",
-    "plotly==7.1.0",
-    "contextily==1.7.1",
-    "python-dotenv==1.2.3",
-    "pydantic==2.13.5",
-    "langchain-core==1.6.5",
-    "langgraph==1.2.12",
-    "langchain-openai==1.6.6",
-    "langchain-anthropic==1.7.4",
-    "langchain-google-genai==4.4.0",
-    "scipy==1.18.1",
-    "tqdm==4.70.1",
-    "openai==3.19.2",
-    # 1.30 keeps Server.list_tools / call_tool, which the stdio server uses.
-    # mcp 2.x removed those decorators.
-    "mcp==1.30.0",
-]

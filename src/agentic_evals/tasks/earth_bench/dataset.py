@@ -33,7 +33,7 @@ from typing import Any, Literal
 
 from inspect_ai.dataset import MemoryDataset, Sample
 
-from agentic_evals.paths import EARTH_AGENT_ROOT
+ASSETS = Path(__file__).resolve().parent / "assets"
 
 Regime = Literal["ap", "if"]
 Modality = Literal["spectrum", "products", "rgb", "all"]
@@ -98,7 +98,7 @@ def build_prompt(record: dict[str, Any], regime: Regime) -> str | None:
 
 @cache
 def _load(root: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    questions = json.loads((root / "benchmark" / "question.json").read_text(encoding="utf-8"))
+    questions = json.loads((root / "question.json").read_text(encoding="utf-8"))
     gold = json.loads((root / "extracted_tool_calls_GT.json").read_text(encoding="utf-8"))
     return questions, {g["question_index"]: g for g in gold}
 
@@ -117,7 +117,7 @@ def load_samples(
     modality: Modality = "all",
     *,
     answer_key: AnswerKey = "gt_file",
-    root: Path = EARTH_AGENT_ROOT,
+    root: Path = ASSETS,
 ) -> list[Sample]:
     questions, gold = _load(root)
     samples: list[Sample] = []

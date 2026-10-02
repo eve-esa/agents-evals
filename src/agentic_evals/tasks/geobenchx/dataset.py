@@ -30,7 +30,7 @@ from typing import Any, Literal
 from inspect_ai.dataset import MemoryDataset, Sample
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser
 
-from agentic_evals.paths import GEOBENCHX_ROOT
+ASSETS = Path(__file__).resolve().parent / "assets"
 
 Group = Literal["all", "merge", "process", "spatial", "heatmaps"]
 Kind = Literal["all", "solvable", "unsolvable", "control"]
@@ -92,13 +92,10 @@ def _step(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 @cache
-def load_records(root: Path = GEOBENCHX_ROOT) -> list[dict[str, Any]]:
-    path = root / "benchmark_set" / "tasks_and_reference_solutions.json"
+def load_records(root: Path = ASSETS) -> list[dict[str, Any]]:
+    path = root / "tasks_and_reference_solutions.json"
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} not found. Fetch GeoBenchX with "
-            "`uv run python scripts/setup_benchmark.py geobenchx`."
-        )
+        raise FileNotFoundError(f"{path} is part of this package and should be here.")
     return json.loads(path.read_text(encoding="utf-8"))["tasks"]
 
 
@@ -108,7 +105,7 @@ def load_samples(
     task_id: str | None = None,
     *,
     on: date | None = None,
-    root: Path = GEOBENCHX_ROOT,
+    root: Path = ASSETS,
 ) -> list[Sample]:
     prompt_date = on or date.today()
     prompt = system_prompt(prompt_date)

@@ -4,8 +4,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Upstream benchmarks are fetched by scripts/fetch_upstream.py, never committed.
+# EO-Gym stays a fetched checkout. Earth-Bench and GeoBenchX bulk files live in data/.
 third_party/
+data/
 
 # Inspect logs and per-sample tool outputs.
 logs/

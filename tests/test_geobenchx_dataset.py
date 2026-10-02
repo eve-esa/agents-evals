@@ -3,32 +3,30 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import sys
 from collections import Counter
 from datetime import date
+from pathlib import Path
 
 import pytest
 
-from agentic_evals.paths import GEOBENCHX_JUDGE_PROMPT, GEOBENCHX_ROOT, GEOBENCHX_VENV, REPO_ROOT, venv_python
 from agentic_evals.tasks.geobenchx import dataset, metrics
+from agentic_evals.tasks.geobenchx.dataset import ASSETS
 
 pytestmark = pytest.mark.upstream
 
-TASKS = GEOBENCHX_ROOT / "benchmark_set" / "tasks_and_reference_solutions.json"
-TUNING = GEOBENCHX_ROOT / "benchmark_set" / "evaluator_tuning_set.json"
+TASKS = ASSETS / "tasks_and_reference_solutions.json"
+TUNING = ASSETS / "evaluator_tuning_set.json"
+UPSTREAM = Path(__file__).resolve().parent / "fixtures" / "geobenchx" / "upstream"
 
 
 @pytest.fixture(scope="module")
 def samples():
-    if not TASKS.exists():
-        pytest.skip("GeoBenchX checkout missing; run `uv run python scripts/setup_benchmark.py geobenchx`")
     return dataset.load_samples(on=date(2020, 1, 2))
 
 
 def test_prompts_match_upstream():
-    if not (GEOBENCHX_ROOT / "geobenchx" / "prompts.py").exists():
-        pytest.skip("GeoBenchX checkout missing")
-    source = (GEOBENCHX_ROOT / "geobenchx" / "prompts.py").read_text(encoding="utf-8")
+    source = (UPSTREAM / "geobenchx" / "prompts.py").read_text(encoding="utf-8")
     source = source.replace("current_date = date.today()", "current_date = date(2020, 1, 2)")
     namespace: dict = {}
     exec(source, namespace)  # noqa: S102 - their prompt module, date pinned above
@@ -94,41 +92,23 @@ def test_task_records_the_pinned_revision():
 
 
 def test_exported_judge_prompt_keeps_its_placeholders():
-    if not GEOBENCHX_JUDGE_PROMPT.exists():
-        pytest.skip("judge prompt not exported; run `uv run python scripts/setup_benchmark.py geobenchx`")
-    text = GEOBENCHX_JUDGE_PROMPT.read_text(encoding="utf-8")
+    text = (ASSETS / "judge_prompt.txt").read_text(encoding="utf-8")
     for field in ("{task_text}", "{reference_solutions}", "{candidate_solution}", "<MATCH SCORE>", "<MATCH REASONING>"):
         assert field in text
 
 
 def test_mcp_server_exposes_the_agent_tools():
-    python = venv_python(GEOBENCHX_VENV)
-    if not python.exists():
-        pytest.skip("GeoBenchX venv missing")
-    probe = subprocess.run([str(python), "-c", "import geopandas, mcp"], capture_output=True, text=True)
-    if probe.returncode != 0:
-        pytest.skip(probe.stderr.strip())
-    script = r"""
-import importlib.util, json, sys
-spec = importlib.util.spec_from_file_location("geobenchx_mcp", sys.argv[1])
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
-names = [tool.name for tool in mod.TOOLS]
-schema = mod.input_schema(next(tool for tool in mod.TOOLS if tool.name == "load_data"))
-reject = next(tool for tool in mod.TOOLS if tool.name == "reject_task")
-json.dump({
-    "names": names,
-    "state_in_schema": "state" in schema.get("properties", {}),
-    "reject": reject.func(state=mod.STATE),
-}, sys.stdout)
-"""
-    completed = subprocess.run(
-        [str(python), "-c", script, str(REPO_ROOT / "scripts" / "geobenchx_mcp.py")],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    payload = json.loads(completed.stdout)
+    pytest.importorskip("geopandas")
+    from agentic_evals.tasks.geobenchx.tools import mcp_server
+
+    names = [tool.name for tool in mcp_server.TOOLS]
+    schema = mcp_server.input_schema(next(tool for tool in mcp_server.TOOLS if tool.name == "load_data"))
+    reject = next(tool for tool in mcp_server.TOOLS if tool.name == "reject_task")
+    payload = {
+        "names": names,
+        "state_in_schema": "state" in schema.get("properties", {}),
+        "reject": reject.func(state=mcp_server.STATE),
+    }
     assert len(payload["names"]) == 24
     assert "plot_contour_lines" not in payload["names"]
     assert payload["names"][-2:] == ["reject_task", "calculate_column_statistics"]
@@ -137,49 +117,33 @@ json.dump({
 
 
 def test_solution_code_matches_upstream_get_solution_code():
-    python = venv_python(GEOBENCHX_VENV)
-    if not python.exists() or not TUNING.exists():
-        pytest.skip("GeoBenchX venv missing; run `uv run python scripts/setup_benchmark.py geobenchx`")
-    probe = subprocess.run([str(python), "-c", "import pandas, pydantic"], capture_output=True, text=True)
-    if probe.returncode != 0:
-        pytest.skip(f"GeoBenchX venv cannot import pandas/pydantic yet: {probe.stderr.strip()}")
-    script = r"""
-import json, sys
-sys.path.insert(0, sys.argv[1])
-from geobenchx.dataclasses import Solution, Step
-from geobenchx.utils import get_solution_code
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(UPSTREAM))
+    from geobenchx.dataclasses import Solution, Step
+    from geobenchx.utils import get_solution_code
 
-def render(steps, add_num=False):
-    solution = Solution(steps=[
-        Step(function_name=step["function_name"], arguments=step["arguments"], comment=step.get("comment"))
-        for step in steps
-    ])
-    return get_solution_code(solution, add_num=add_num)
+    def render(steps, add_num=False):
+        solution = Solution(steps=[
+            Step(function_name=step["function_name"], arguments=step["arguments"], comment=step.get("comment"))
+            for step in steps
+        ])
+        return get_solution_code(solution, add_num=add_num)
 
-root = sys.argv[1]
-tuning = json.load(open(root + "/benchmark_set/evaluator_tuning_set.json", encoding="utf-8"))
-main = json.load(open(root + "/benchmark_set/tasks_and_reference_solutions.json", encoding="utf-8"))
-rows = []
-for task in tuning["tasks"]:
-    steps = task["generated_solution"]["steps"]
-    rows.append({"steps": steps, "add_num": False, "code": render(steps)})
-commented = next(
-    solution["steps"]
-    for task in main["tasks"]
-    for solution in task["reference_solutions"]
-    if any(step.get("comment") for step in solution["steps"])
-)
-rows.append({"steps": commented, "add_num": False, "code": render(commented)})
-rows.append({"steps": commented, "add_num": True, "code": render(commented, add_num=True)})
-json.dump(rows, sys.stdout)
-"""
-    completed = subprocess.run(
-        [str(python), "-c", script, str(GEOBENCHX_ROOT)],
-        check=True,
-        capture_output=True,
-        text=True,
+    tuning = json.loads(TUNING.read_text(encoding="utf-8"))
+    main = json.loads(TASKS.read_text(encoding="utf-8"))
+    rows = []
+    for task in tuning["tasks"]:
+        steps = task["generated_solution"]["steps"]
+        rows.append({"steps": steps, "add_num": False, "code": render(steps)})
+    commented = next(
+        solution["steps"]
+        for task in main["tasks"]
+        for solution in task["reference_solutions"]
+        if any(step.get("comment") for step in solution["steps"])
     )
-    for row in json.loads(completed.stdout):
+    rows.append({"steps": commented, "add_num": False, "code": render(commented)})
+    rows.append({"steps": commented, "add_num": True, "code": render(commented, add_num=True)})
+    for row in rows:
         ours = metrics.solution_code(
             [
                 {"name": step["function_name"], "arguments": step["arguments"], "comment": step.get("comment")}

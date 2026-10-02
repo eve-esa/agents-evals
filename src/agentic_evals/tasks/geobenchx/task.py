@@ -64,7 +64,7 @@ from agentic_evals.tasks.geobenchx.scorers import (
     geobenchx_scorer,
     geobenchx_steps,
 )
-from agentic_evals.tasks.geobenchx.tools import sample_servers
+from agentic_evals.tasks.geobenchx.tools import ported_code_sha256, sample_servers
 from agentic_evals.tooling import publish_mcp_servers
 
 # geobenchx/agent.py execute_task default. This is LangGraph's superstep limit.
@@ -151,6 +151,7 @@ def geobenchx(
             "recursion_limit": RECURSION_LIMIT,
             "prompt_date": prompt_date,
             "geobenchx_rev": _revision(),
+            "tools_sha256": ported_code_sha256(),
         },
         version=1,
     )

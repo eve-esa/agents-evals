@@ -8,7 +8,7 @@ from collections import defaultdict
 import pytest
 
 from agentic_evals.tasks.earth_bench import dataset
-from conftest import published_run_dirs
+from conftest import published_run_dirs, read_json
 
 pytestmark = pytest.mark.upstream
 
@@ -18,7 +18,7 @@ def _published_queries(root) -> dict[str, dict[int, str]]:
     out: dict[str, dict[int, str]] = defaultdict(dict)
     for run_dir in published_run_dirs(root):
         regime = run_dir.name.rsplit("_", 1)[1].lower()
-        for pred in json.loads((run_dir / "extracted_tool_calls.json").read_text()):
+        for pred in read_json(run_dir / "extracted_tool_calls.json"):
             query = pred["query"]
             if query.startswith("Error processing"):
                 continue

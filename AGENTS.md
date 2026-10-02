@@ -39,7 +39,7 @@ If a task looks like it belongs to one of the above, stop and confirm before add
 - **[Inspect AI](https://inspect.aisi.org.uk/)** is the harness. Each benchmark is an Inspect task (`@task` = dataset + solver + scorers) under `src/agentic_evals/tasks/<benchmark>/`, registered through the `inspect_ai` entry point in `pyproject.toml` (`src/agentic_evals/_registry.py`). Inspect provides model selection (`--model openai-api/<name>/<model>` with `<NAME>_BASE_URL` / `<NAME>_API_KEY`), MCP tool connections, `.eval` logs, epochs/reducers, model roles for judges, and offline re-scoring (`inspect score`). Do not rebuild any of that.
 - **LangGraph** for agent construction (latest is `langgraph` 1.2.x, requires Python >= 3.10; `langchain` 1.4.x). This matches the agent stack already used in EVE. Our agents are ordinary LangGraph graphs that run as Inspect solvers through `agent_bridge()` (`ChatOpenAI(model="inspect")` is routed to whatever `--model` is), selected with `--solver`. Inspect's built-in `react()` is not our reference agent.
 - Tools are reached over **MCP** wherever the benchmark permits, since EVE's production path is MCP-based and we want the evaluated configuration to resemble the deployed one.
-- Upstream benchmark repos are **fetched, never vendored or imported**: `scripts/setup_benchmark.py <benchmark>` installs one benchmark (pinned checkout, its tool environment, and its data) via `scripts/fetch_upstream.py`. Revisions are pinned in `upstream.lock.toml` and land in a gitignored `third_party/`. Each upstream tool server runs in its own virtual environment (Earth-Agent pins numpy 1.24 / Python ≤ 3.11, EO-Gym needs numpy 2 / Python ≥ 3.12 — they cannot share an environment with each other or with us).
+- Earth-Bench and GeoBenchX tool code is **ported into this repo** under `tasks/<benchmark>/tools/` (MIT; notices in each `PORTING.md`). It runs as MCP stdio subprocesses of this interpreter. Install a benchmark's libraries with `uv sync --extra earth-bench` or `uv sync --extra geobenchx`, and its bulk files with `scripts/setup_benchmark.py <benchmark>`. Scores are for this port at these library versions, not for the upstream pins. EO-Gym is still fetched, never vendored: `scripts/setup_benchmark.py eo-gym` uses `scripts/fetch_upstream.py` and a separate venv, because its server imports torch. Revisions stay in `upstream.lock.toml`.
 
 Before using a LangGraph/LangChain/Inspect API, verify it against the installed version's documentation or source. These packages moved to 1.x recently and many pre-1.0 patterns found in blog posts no longer apply.
 
@@ -231,11 +231,9 @@ pyproject.toml            uv project; registers the package with Inspect ([proje
                           and configures inspect-wandb ([tool.inspect-wandb.*])
 upstream.lock.toml        pinned upstream revisions + the tools-venv package lists
 scripts/
-  setup_benchmark.py      install one benchmark: pinned checkout, its venv, and its data
-  fetch_upstream.py       implementation behind setup_benchmark.py (per-benchmark flags)
+  setup_benchmark.py      download one benchmark's data (Earth-Bench rasters, GeoBenchX Drive archive, or the EO-Gym checkout)
+  fetch_upstream.py       EO-Gym checkout and its venv
   export_eo_gym_tools.py  run with EO-Gym's own python; writes third_party/eo_gym_tools.json
-  export_geobenchx_judge_prompt.py  run with GeoBenchX's python; writes third_party/geobenchx_judge_prompt.txt
-  geobenchx_mcp.py        GeoBenchX's 24 tools as an MCP stdio server (their venv)
 src/agentic_evals/
   _registry.py            everything Inspect can address by name (agentic_evals/<name>): tasks, agents, scorers
   paths.py                locations of third_party/, venvs, runs/ (each overridable by env var)
@@ -250,10 +248,9 @@ src/agentic_evals/
   tasks/<benchmark>/      one folder per benchmark, same shape:
     task.py               the @task (dataset + setup solvers + default agent + scorers + metadata)
     dataset.py            upstream records -> Inspect Samples (prompts reproduced from upstream)
-    tools.py              per-sample MCP server configs for the upstream tool servers
+    tools/                that benchmark's tool code and the MCP config that launches it
     metrics.py            pure metric functions, cited and tested against upstream
     scorers.py            Inspect scorers/reducers wrapping metrics.py, reading the trace
-    mcp_proxy.py          (eo_gym only) MCP stdio server in front of EO-Gym's HTTP /execute
 tests/                    offline tests; `upstream`-marked ones skip if third_party/ is missing
 third_party/              (gitignored) Earth-Agent/, EO-Gym/, GeoBenchX/, venvs/{earth-agent,eo-gym,geobenchx}, eo_gym_tools.json, geobenchx_judge_prompt.txt
 logs/, runs/              (gitignored) Inspect .eval logs; per-sample tool output directories
@@ -273,11 +270,10 @@ Extending:
 ## Running
 
 ```bash
-uv sync
-uv run python scripts/setup_benchmark.py earth-bench                 # this benchmark only (16.6 GB of rasters; needs gdal-config)
-uv run python scripts/setup_benchmark.py earth-bench --modality spectrum
-uv run python scripts/setup_benchmark.py eo-gym                      # ~47 GB, unpacked. Then start third_party/EO-Gym/scripts/start_tool_server.sh
-uv run python scripts/setup_benchmark.py geobenchx                   # checkout, tools venv, Google Drive archive (needs gdal-config)
+uv sync --extra earth-bench    # or --extra geobenchx; EO-Gym's server stays a separate venv
+uv run python scripts/setup_benchmark.py earth-bench                 # rasters only (16.6 GB). --modality spectrum for a subset
+uv run python scripts/setup_benchmark.py geobenchx                   # Google Drive archive into data/geobenchx
+uv run python scripts/setup_benchmark.py eo-gym                      # checkout plus ~47 GB. Then start third_party/EO-Gym/scripts/start_tool_server.sh
 uv run pytest                                                             # offline: metric reproduction and differential tests
 
 export EVE_BASE_URL=... EVE_API_KEY=...

@@ -1,27 +1,31 @@
-"""The Earth-Agent kits start from their own venv and serve the paper's 104 tools."""
+"""The Earth-Bench kits are the ported sources and serve the paper's 104 tools."""
 
 from __future__ import annotations
 
 import asyncio
-import json
+import importlib.util
 
 import pytest
 
-from agentic_evals.paths import EARTH_AGENT_VENV, venv_python
+from agentic_evals.paths import EARTH_BENCH_DATA
 from agentic_evals.tasks.earth_bench.tools import (
     KITS,
     PERCEPTION_LOOKUP,
     is_tool_failure,
     kit_servers,
+    perception_lookup_available,
     rgb_unavailable_reason,
 )
 
 pytestmark = pytest.mark.upstream
 
 
-def test_perception_lookup_path_is_the_upstream_literal(earth_agent_root):
-    source = (earth_agent_root / "agent" / "tools" / "Perception.py").read_text(encoding="utf-8")
-    assert str(PERCEPTION_LOOKUP) in source
+def test_perception_lookup_is_the_vendored_csv():
+    assert PERCEPTION_LOOKUP.name == "model_results.csv"
+    assert perception_lookup_available()
+    text = PERCEPTION_LOOKUP.read_text(encoding="utf-8")
+    assert "MSCN" in text
+    assert "question189" in text
 
 
 def test_rgb_is_unscored_only_when_the_lookup_is_missing(monkeypatch):
@@ -45,8 +49,8 @@ def test_is_tool_failure():
     assert not is_tool_failure("benchmark/out/question1/tvdi.tif")
 
 
-@pytest.mark.skipif(not venv_python(EARTH_AGENT_VENV).exists(), reason="tools venv not built")
-def test_kits_serve_104_tools(earth_agent_root, tmp_path):
+@pytest.mark.skipif(importlib.util.find_spec("fastmcp") is None, reason="uv sync --extra earth-bench")
+def test_kits_serve_104_tools(tmp_path):
     from langchain_mcp_adapters.client import MultiServerMCPClient
 
     async def run():
@@ -59,6 +63,8 @@ def test_kits_serve_104_tools(earth_agent_root, tmp_path):
     tools, listing = asyncio.run(run())
     assert len(KITS) == 5
     assert len(tools) == 104
-    if (earth_agent_root / "benchmark" / "data" / "question1").exists():
+    if (EARTH_BENCH_DATA / "benchmark" / "data" / "question1").exists():
+        import json
+
         files = json.loads(listing[0]["text"])
         assert "Xinjiang_2019-01-01_LST.tif" in files

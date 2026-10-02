@@ -16,7 +16,7 @@ import pytest
 
 from agentic_evals.tasks.earth_bench import metrics
 from agentic_evals.tasks.earth_bench.tools import scalar_str_params
-from conftest import published_run_dirs
+from conftest import published_run_dirs, read_json
 
 pytestmark = pytest.mark.upstream
 
@@ -50,8 +50,8 @@ def test_step_by_step_matches_published(earth_agent_root, earth_bench_gold):
     scope = metrics.upstream_scored_questions(list(gold))
     compared = 0
     for run_dir in _published(earth_agent_root):
-        preds = {_qkey(p["question_index"]): p for p in json.loads((run_dir / "extracted_tool_calls.json").read_text())}
-        published = json.loads((run_dir / "step_by_step_evaluation_results.json").read_text())
+        preds = {_qkey(p["question_index"]): p for p in read_json(run_dir / "extracted_tool_calls.json")}
+        published = read_json(run_dir / "step_by_step_evaluation_results.json")
         individual = published["individual_results"]
         assert set(individual) == {q for q in scope if q in preds}, run_dir.name
         for q, expected in individual.items():
@@ -75,10 +75,10 @@ def test_end_to_end_matches_published(earth_agent_root, earth_bench_gold):
     for run_dir in _published(earth_agent_root):
         answers = {
             _qkey(a["question_id"]): a
-            for a in json.loads((run_dir / "results_summary_polished.json").read_text())
+            for a in read_json(run_dir / "results_summary_polished.json")
         }
-        calls = {_qkey(p["question_index"]): p for p in json.loads((run_dir / "extracted_tool_calls.json").read_text())}
-        published = json.loads((run_dir / "end_to_end_evaluation_results.json").read_text())
+        calls = {_qkey(p["question_index"]): p for p in read_json(run_dir / "extracted_tool_calls.json")}
+        published = read_json(run_dir / "end_to_end_evaluation_results.json")
 
         correct = 0
         evaluated = 0
