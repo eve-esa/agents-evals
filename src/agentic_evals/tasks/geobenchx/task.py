@@ -25,8 +25,10 @@ the same idle timeout and retry cap as the match judge
 that is still producing tokens does not. ``openrouter_ignore`` is OpenRouter's
 ``provider.ignore`` (https://openrouter.ai/docs/guides/routing/provider-selection)
 and applies only to the agent model. Mistral Small 3.2 on that router should
-skip ``deepinfra`` and ``venice``: those hosts return HTTP 400 when the tool
-name is ``reject_task`` plus trailing whitespace.
+be pinned to ``venice`` (``-T openrouter_only=venice``): it is the only host
+whose context is 256k. Parasail is 131072 and rejects a prompt that long.
+Venice and DeepInfra return HTTP 400 when a tool name is ``reject_task`` plus
+trailing whitespace; the agent strips that whitespace before the next call.
 
 The official scores are the match judgment (0/1/2) and ``length_diff``.
 Each judge is a separate result row named with its checkpoint id, without the
@@ -76,19 +78,32 @@ def _revision() -> str:
     return lock["geobenchx"]["rev"]
 
 
-def openrouter_extra_body(ignore: str | list[str]) -> dict[str, object] | None:
-    """OpenRouter ``provider.ignore`` body, or ``None`` when nothing is skipped.
+def _provider_names(value: str | list[str]) -> list[str]:
+    if isinstance(value, str):
+        return [part.strip().lower() for part in value.split(",") if part.strip()]
+    return [part.strip().lower() for part in value if part.strip()]
+
+
+def openrouter_extra_body(
+    ignore: str | list[str] = "",
+    only: str | list[str] = "",
+) -> dict[str, object] | None:
+    """OpenRouter provider routing, or ``None`` when routing is left alone.
 
     Slugs are the lowercase provider names from the endpoints API
-    (``deepinfra``, ``venice``). https://openrouter.ai/docs/guides/routing/provider-selection
+    (``deepinfra``, ``venice``, ``parasail``, ``mistral``).
+    https://openrouter.ai/docs/guides/routing/provider-selection
+
+    ``only`` pins those hosts and disables fallbacks. ``ignore`` skips hosts
+    and still allows the rest. ``only`` wins when both are set.
     """
-    if isinstance(ignore, str):
-        names = [part.strip() for part in ignore.split(",") if part.strip()]
-    else:
-        names = [part.strip() for part in ignore if part.strip()]
-    if not names:
+    pinned = _provider_names(only)
+    if pinned:
+        return {"provider": {"only": pinned, "allow_fallbacks": False}}
+    skipped = _provider_names(ignore)
+    if not skipped:
         return None
-    return {"provider": {"ignore": names, "allow_fallbacks": True}}
+    return {"provider": {"ignore": skipped, "allow_fallbacks": True}}
 
 
 @task
@@ -99,6 +114,7 @@ def geobenchx(
     judges: str | list[str] = "",
     trajectory_judges: str | list[str] = "",
     openrouter_ignore: str | list[str] = "",
+    openrouter_only: str | list[str] = "",
     solver: Solver | Agent | None = None,
 ) -> Task:
     """GeoBenchX tasks with GeoBenchX's tools over MCP.
@@ -114,11 +130,15 @@ def geobenchx(
             addition; see ``agentic_evals.scorers.judges``).
         openrouter_ignore: Comma-separated OpenRouter provider slugs the agent
             must not use. Empty leaves routing alone.
+        openrouter_only: Comma-separated OpenRouter provider slugs the agent
+            must use, with fallbacks off. For Mistral Small 3.2 this is
+            ``venice``: it is the only host with a 256k context. Parasail is
+            131072, DeepInfra 128000, and Mistral's own endpoint 32768.
         solver: Agent to evaluate (default: LangGraph ReAct, recursion limit 25).
     """
     dataset = geobenchx_dataset(group, kind, task_id)
     prompt_date = dataset[0].metadata["prompt_date"] if len(dataset) else ""
-    provider = openrouter_extra_body(openrouter_ignore)
+    provider = openrouter_extra_body(openrouter_ignore, openrouter_only)
     return Task(
         dataset=dataset,
         setup=[record_run_identity(), publish_mcp_servers(sample_servers)],
@@ -148,6 +168,7 @@ def geobenchx(
             "judges": judges,
             "trajectory_judges": trajectory_judges,
             "openrouter_ignore": openrouter_ignore,
+            "openrouter_only": openrouter_only,
             "recursion_limit": RECURSION_LIMIT,
             "prompt_date": prompt_date,
             "geobenchx_rev": _revision(),
