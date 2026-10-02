@@ -15,15 +15,17 @@ import json
 import math
 import random
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from agentic_evals.paths import EO_GYM_ROOT, EO_GYM_VENV, venv_python
+from agentic_evals.paths import EO_GYM_VENV, venv_python
 from agentic_evals.tasks.eo_gym import metrics
+from agentic_evals.tasks.eo_gym.dataset import TEST_SET
 
 pytestmark = pytest.mark.upstream
 
-TEST_SET = EO_GYM_ROOT / "datasets" / "eo_gym_test_set.jsonl"
+UPSTREAM_ROOT = Path(__file__).resolve().parent / "fixtures" / "eo_gym" / "upstream"
 
 # Runs inside EO-Gym's venv: agent_passk imports EO-Gym's tool registry (torch etc.).
 UPSTREAM_SCRIPT = r"""
@@ -65,11 +67,9 @@ class StubMatcher:
 
 @pytest.fixture(scope="module")
 def upstream_python():
-    if not TEST_SET.exists():
-        pytest.skip("EO-Gym checkout missing; run `uv run python scripts/setup_benchmark.py eo-gym --skip-data`")
     python = venv_python(EO_GYM_VENV)
     if not python.exists():
-        pytest.skip("EO-Gym venv missing; run `uv run python scripts/setup_benchmark.py eo-gym --skip-data`")
+        pytest.skip("EO-Gym server venv missing; run `uv run python scripts/setup_benchmark.py eo-gym --skip-data`")
     return python
 
 
@@ -141,7 +141,7 @@ def test_matches_released_scorer(upstream_python, tmp_path):
                 f.write(json.dumps(_to_upstream_record(rec, k, steps, final, question)) + "\n")
 
     result = subprocess.run(
-        [str(upstream_python), "-c", UPSTREAM_SCRIPT, str(EO_GYM_ROOT), str(TEST_SET), str(pred_path)],
+        [str(upstream_python), "-c", UPSTREAM_SCRIPT, str(UPSTREAM_ROOT), str(TEST_SET), str(pred_path)],
         capture_output=True,
         text=True,
         env={"RUN_ON_LOCAL": "1", "TOOL_RUN_ON_LOCAL": "1", "PATH": "/usr/bin:/bin", "HOME": str(tmp_path)},

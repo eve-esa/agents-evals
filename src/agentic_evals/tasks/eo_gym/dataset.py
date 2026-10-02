@@ -28,8 +28,12 @@ from typing import Any, Literal
 from inspect_ai.dataset import MemoryDataset, Sample
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser, ContentImage, ContentText
 
-from agentic_evals.paths import EO_GYM_ROOT, EO_GYM_TOOLS_JSON
+from agentic_evals.paths import EO_GYM_ROOT
 from agentic_evals.tasks.eo_gym import metrics
+
+_TASK = Path(__file__).resolve().parent
+TEST_SET = _TASK / "data" / "eo_gym_test_set.jsonl"
+TOOLS_JSON = _TASK / "tools" / "tools.json"
 
 PromptVariant = Literal["simple", "complex"]
 Toolset = Literal["skill", "all"]
@@ -100,11 +104,9 @@ def allows_missing_images(data_source: str, question: str) -> bool:
 
 
 @cache
-def tool_catalog(path: Path = EO_GYM_TOOLS_JSON) -> dict[str, Any]:
+def tool_catalog(path: Path = TOOLS_JSON) -> dict[str, Any]:
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} missing; run `uv run python scripts/setup_benchmark.py eo-gym` to export EO-Gym's tool schemas"
-        )
+        raise FileNotFoundError(f"{path} is part of this package and should be here.")
     return json.loads(path.read_text())
 
 
@@ -151,8 +153,7 @@ def build_sample(
     )
 
 
-def load_records(root: Path = EO_GYM_ROOT) -> list[dict[str, Any]]:
-    path = root / "datasets" / "eo_gym_test_set.jsonl"
+def load_records(path: Path = TEST_SET) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 

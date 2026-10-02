@@ -33,7 +33,7 @@ from typing import Any, Literal
 
 from inspect_ai.dataset import MemoryDataset, Sample
 
-ASSETS = Path(__file__).resolve().parent / "assets"
+TASK_DATA = Path(__file__).resolve().parent / "data"
 
 Regime = Literal["ap", "if"]
 Modality = Literal["spectrum", "products", "rgb", "all"]
@@ -117,7 +117,7 @@ def load_samples(
     modality: Modality = "all",
     *,
     answer_key: AnswerKey = "gt_file",
-    root: Path = ASSETS,
+    root: Path = TASK_DATA,
 ) -> list[Sample]:
     questions, gold = _load(root)
     samples: list[Sample] = []

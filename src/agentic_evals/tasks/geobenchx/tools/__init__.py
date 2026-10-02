@@ -20,7 +20,7 @@ from inspect_ai.solver import TaskState
 
 from agentic_evals.paths import GEOBENCHX_DATA, GEOBENCHX_GEODATA, GEOBENCHX_STATDATA
 
-_ASSETS = Path(__file__).resolve().parent.parent / "assets"
+_PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 _TOOLS_DIR = Path(__file__).resolve().parent
 
 
@@ -38,7 +38,7 @@ def data_directories() -> tuple[Path, Path]:
 
 def judge_prompt() -> str:
     """The committed ``RESULT_CHECKING_PROMPT`` template."""
-    path = _ASSETS / "judge_prompt.txt"
+    path = _PROMPTS / "judge_prompt.txt"
     if not path.exists():
         raise FileNotFoundError(f"{path} is part of this package and should be here.")
     return path.read_text(encoding="utf-8")

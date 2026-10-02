@@ -82,5 +82,5 @@ enabled = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "upstream: needs the pinned Earth-Agent checkout in third_party/ (run scripts/setup_benchmark.py earth-bench --skip-data)",
+    "upstream: compares a port against the copied upstream files in this repo",
 ]

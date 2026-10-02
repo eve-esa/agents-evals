@@ -11,12 +11,13 @@ from pathlib import Path
 import pytest
 
 from agentic_evals.tasks.geobenchx import dataset, metrics
-from agentic_evals.tasks.geobenchx.dataset import ASSETS
+from agentic_evals.tasks.geobenchx.dataset import TASK_DATA
 
 pytestmark = pytest.mark.upstream
 
-TASKS = ASSETS / "tasks_and_reference_solutions.json"
-TUNING = ASSETS / "evaluator_tuning_set.json"
+TASKS = TASK_DATA / "tasks_and_reference_solutions.json"
+TUNING = TASK_DATA / "evaluator_tuning_set.json"
+JUDGE_PROMPT = Path(__file__).resolve().parents[1] / "src" / "agentic_evals" / "tasks" / "geobenchx" / "prompts" / "judge_prompt.txt"
 UPSTREAM = Path(__file__).resolve().parent / "fixtures" / "geobenchx" / "upstream"
 
 
@@ -92,7 +93,7 @@ def test_task_records_the_pinned_revision():
 
 
 def test_exported_judge_prompt_keeps_its_placeholders():
-    text = (ASSETS / "judge_prompt.txt").read_text(encoding="utf-8")
+    text = JUDGE_PROMPT.read_text(encoding="utf-8")
     for field in ("{task_text}", "{reference_solutions}", "{candidate_solution}", "<MATCH SCORE>", "<MATCH REASONING>"):
         assert field in text
 

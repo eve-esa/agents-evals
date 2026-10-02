@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 from typing import Any
 
 from inspect_ai.model import (
@@ -53,13 +54,8 @@ DEFAULT_JUDGE = "openai/gpt-4.1-mini"
 NOT_APPLICABLE_KEY = "agentic_evals:not_applicable"
 
 # Verbatim from eo_gym_data_synthesis/prompt_manager/evaluation_prompts.py.
-SEMANTIC_FINAL_ANSWER_JUDGE_SYSTEM_PROMPT = (
-    "You are a strict semantic equivalence judge for QA final answers. "
-    "Compare REFERENCE and CANDIDATE answers for the same question. "
-    'Return JSON only: {"is_same_meaning": boolean, "reason": string}. '
-    "Mark false for contradiction or materially different claims. "
-    "Ignore wording differences if meaning is equivalent."
-)
+_JUDGE_PROMPT = Path(__file__).resolve().parent / "prompts" / "semantic_final_answer.txt"
+SEMANTIC_FINAL_ANSWER_JUDGE_SYSTEM_PROMPT = _JUDGE_PROMPT.read_text(encoding="utf-8").strip()
 
 # Released SemanticMatcher uses response_format json_object. Inspect's
 # response_schema is the equivalent; strict=False so a non-OpenAI grader still runs.

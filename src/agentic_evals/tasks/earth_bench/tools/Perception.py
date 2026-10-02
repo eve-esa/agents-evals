@@ -391,7 +391,7 @@ def get_model_output(model_name: str, input_image_path: str, **args):
 
     # Vendored with the task. Resolved from this file because the kit's cwd is the
     # data tree, not the package.
-    lookup = Path(__file__).resolve().parent.parent / "assets" / "model_results.csv"
+    lookup = Path(__file__).resolve().parent / "model_results.csv"
     results = pd.read_csv(lookup, sep=';')
     result = None
     try:

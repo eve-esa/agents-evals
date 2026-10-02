@@ -26,7 +26,7 @@ KITS = ("Analysis", "Index", "Inversion", "Perception", "Statistics")
 PERCEPTION_FAILURE = "Failed to call model"
 
 # Vendored lookup. Perception.py reads the same file via its own __file__.
-PERCEPTION_LOOKUP = Path(__file__).resolve().parent.parent / "assets" / "model_results.csv"
+PERCEPTION_LOOKUP = Path(__file__).resolve().parent / "model_results.csv"
 _TOOLS_DIR = Path(__file__).resolve().parent
 
 
