@@ -22,6 +22,13 @@ EO-Gym's tool server is copied into `tasks/eo_gym/server`. It imports torch, so 
 
 ## Install
 
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if it is not already on the machine. uv downloads Python 3.12 itself; the system Python can be older.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ```bash
 git clone https://github.com/eve-esa/agents-evals.git
 cd agents-evals
