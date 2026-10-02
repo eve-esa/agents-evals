@@ -27,8 +27,9 @@ The same block, including each class and each judge's counts, is logged once.
 Logging it again appends a history step, which is why a republished run draws
 a curve. ``{benchmark}/llm_as_judge_avg`` and ``{benchmark}/llm_as_judge_{model}``
 are copies of those means so the agents workspace can chart them next to
-``open_ended``. The run name is the model checkpoint. The readable trace is
-the conversation, stored on the ``samples`` table.
+``open_ended``. The run name is the model checkpoint plus the benchmark
+(``qwen3.8-27b_geobenchx``). The readable trace is the conversation, stored
+on the ``samples`` table.
 
 https://github.com/eve-esa/lm-evaluation-harness/blob/main/lm_eval/loggers/wandb_logger.py
 https://docs.wandb.ai/models/track/log/log-summary
@@ -42,7 +43,7 @@ import math
 import statistics
 from typing import Any
 
-from inspect_ai.hooks import Hooks, SampleEnd, TaskEnd, hooks
+from inspect_ai.hooks import Hooks, SampleEnd, TaskEnd, TaskStart, hooks
 
 from agentic_evals.agents.trace_callback import TRACE_KEY
 
@@ -359,10 +360,21 @@ def dashboard_aliases(summary: dict[str, int | float], benchmark: str) -> dict[s
     return out
 
 
-def model_run_name(model: str | None) -> str:
-    """Run name: the checkpoint being tested, without the provider prefix."""
-    leaf = (model or "model").rstrip("/").split("/")[-1].strip()
-    return leaf or "model"
+def model_run_name(model: str | None, benchmark: str | None = None) -> str:
+    """Display name: the checkpoint, then the benchmark.
+
+    ``openai-api/openrouter/qwen/qwen3.8-27b`` on GeoBenchX is
+    ``qwen3.8-27b_geobenchx``. The checkpoint stays a single token so a
+    workspace search on the model still matches. inspect-wandb calls
+    ``wandb.init(name=None)`` for a single eval, and wandb then keeps a
+    generated id as the display name
+    (https://docs.wandb.ai/ref/python/init, ``name``).
+    """
+    leaf = (model or "model").rstrip("/").split("/")[-1].strip() or "model"
+    label = (benchmark or "").strip()
+    if not label:
+        return leaf
+    return f"{leaf}_{label}"
 
 
 def results_rows(scores: list[Any], benchmark: str) -> list[dict[str, Any]]:
@@ -520,6 +532,82 @@ def _final_answer(sample: Any) -> str:
     return answer
 
 
+def _checkpoint_id(model_id: str) -> str:
+    """Drop the Inspect and OpenRouter prefixes. ``openai-api/openrouter/qwen/qwen3.8-27b`` is ``qwen/qwen3.8-27b``."""
+    changed = True
+    while changed:
+        changed = False
+        for prefix in ("openai-api/", "openrouter/"):
+            if model_id.startswith(prefix):
+                model_id = model_id[len(prefix) :]
+                changed = True
+    return model_id
+
+
+def _judge_verdicts(score: Any) -> list[tuple[str, float | None, str]]:
+    """One entry per judge on this score: checkpoint id, numeric verdict, written output.
+
+    A ``{model}/match`` field is GeoBenchX's 0/1/2 verdict. Otherwise a score
+    with ``judge_model`` is a trajectory judge (``trajectory_accuracy``) or
+    EO-Gym's answer judge (``correct``). ``merged/match`` is the panel mean
+    and stays on the ``match`` column.
+    """
+    value = getattr(score, "value", None)
+    if not isinstance(value, dict):
+        return []
+    explanation = getattr(score, "explanation", None)
+    text = explanation if isinstance(explanation, str) else ""
+    named: list[tuple[str, float | None, str]] = []
+    for key, item in value.items():
+        label = str(key)
+        if label.startswith("merged/") or not label.endswith("/match"):
+            continue
+        slug = label[: -len("/match")]
+        if slug:
+            named.append((slug, _finite(item), text))
+    if named:
+        return named
+    metadata = getattr(score, "metadata", None) or {}
+    model = metadata.get("judge_model")
+    if not isinstance(model, str) or not model.strip():
+        return []
+    slug = _checkpoint_id(model.strip())
+    if not slug:
+        return []
+    number = _finite(value.get("trajectory_accuracy"))
+    if number is None:
+        number = _finite(value.get("correct"))
+    return [(slug, number, text)]
+
+
+def _sample_judge_fields(sample: Any) -> dict[str, Any]:
+    """``{model}/match`` and ``{model}/output`` for every judge on this sample."""
+    found: dict[str, tuple[float | None, str]] = {}
+    for score in (getattr(sample, "scores", None) or {}).values():
+        for slug, number, text in _judge_verdicts(score):
+            found.setdefault(slug, (number, text))
+    fields: dict[str, Any] = {}
+    for slug in sorted(found):
+        number, text = found[slug]
+        fields[f"{slug}/match"] = number
+        fields[f"{slug}/output"] = text
+    return fields
+
+
+def sample_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Fixed sample columns, then each judge's score and output, sorted by model id."""
+    slugs = sorted(
+        {
+            key[: -len("/match")]
+            for row in rows
+            for key in row
+            if key.endswith("/match") and key != "match" and "/" in key
+        }
+    )
+    extra = tuple(column for slug in slugs for column in (f"{slug}/match", f"{slug}/output"))
+    return SAMPLE_COLUMNS + extra
+
+
 def _sample_id(sample: Any) -> str:
     sample_id = str(getattr(sample, "id", ""))
     epoch = getattr(sample, "epoch", 1)
@@ -551,6 +639,7 @@ def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
                 "length_diff": _named(flat, "length_diff"),
                 "n_tool_calls": len(names),
                 "tool_trace": " -> ".join(names),
+                **_sample_judge_fields(sample),
             }
         )
     return rows
@@ -636,19 +725,17 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
         groups = [groups]
     summary.update(grouped_metrics(samples, benchmark, [str(field) for field in groups]))
     summary.update(dashboard_aliases(summary, benchmark))
-    name = model_run_name(getattr(spec, "model", None))
-    current = getattr(run, "name", None)
-    if not current or current == getattr(run, "id", None):
-        run.name = name
+    run.name = model_run_name(getattr(spec, "model", None), benchmark)
     _drop_stale_summary(run, benchmark)
     for key, value in summary.items():
         run.summary[key] = value
     # One history row for the whole block, including class splits and judge
     # stats. A second log appends a step.
+    rows = sample_rows(samples)
     run.log(
         {
             **summary,
-            SAMPLES_KEY: _as_table(SAMPLE_COLUMNS, sample_rows(samples)),
+            SAMPLES_KEY: _as_table(sample_table_columns(rows), rows),
             METRICS_KEY: _as_table(METRICS_COLUMNS, results_rows(scores, benchmark)),
         }
     )
@@ -660,6 +747,23 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
     description="Log shared summary metrics and trace tables onto the W&B run.",
 )
 class WandbCompare(Hooks):
+    async def on_task_start(self, data: TaskStart) -> None:
+        # Runs after inspect-wandb's on_task_start (see _registry import order),
+        # so the run inspect-wandb just opened gets a stable display name
+        # instead of the generated id.
+        try:
+            import wandb
+        except ImportError:
+            return
+        run = wandb.run
+        if run is None:
+            return
+        spec = data.spec
+        run.name = model_run_name(
+            getattr(spec, "model", None),
+            benchmark_name(getattr(spec, "metadata", None), getattr(spec, "task", None)),
+        )
+
     async def on_sample_end(self, data: SampleEnd) -> None:
         # The finished log passed to on_task_end does not always include
         # sample bodies. Keep the ones SampleEnd already has.

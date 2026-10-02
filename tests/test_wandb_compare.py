@@ -15,6 +15,7 @@ from agentic_evals.wandb_compare import (
     render_transcript,
     results_rows,
     sample_rows,
+    sample_table_columns,
     samples_for_table,
     summary_metrics,
     trace_records,
@@ -98,6 +99,7 @@ def test_summary_keys_and_results_table() -> None:
     assert "geobenchx/tao" not in aliases
     assert "geobenchx/llm_as_judge/qwen_qwen3.8-27b/n" not in aliases
     assert model_run_name("openai-api/openrouter/qwen/qwen3.8-27b") == "qwen3.8-27b"
+    assert model_run_name("openai-api/openrouter/qwen/qwen3.8-27b", "geobenchx") == "qwen3.8-27b_geobenchx"
     rows = results_rows(scores, "geobenchx")
     assert list(rows[0]) == list(METRICS_COLUMNS)
     by_metric = {row["metric"]: row for row in rows}
@@ -122,9 +124,15 @@ def test_sample_trace_table() -> None:
                 value={"tao": 1.0, "tio": 1.0, "tem": 0.5, "param_acc": 0.5}
             ),
             "geobenchx_scorer": SimpleNamespace(
-                value={"qwen/qwen3.8-27b/match": 2, "qwen/qwen3.8-27b/length_diff": 0.0}
+                value={"qwen/qwen3.8-27b/match": 2, "qwen/qwen3.8-27b/length_diff": 0.0},
+                explanation=None,
             ),
             "geobenchx_merged": SimpleNamespace(value={"merged/match": 2}),
+            "trajectory_judge": SimpleNamespace(
+                value={"trajectory_accuracy": 1.0},
+                explanation="the tools match the reference",
+                metadata={"judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"},
+            ),
         },
         messages=[
             SimpleNamespace(role="user", text="Where is Rome?", tool_calls=None),
@@ -146,7 +154,18 @@ def test_sample_trace_table() -> None:
 
     rows = sample_rows([sample])
 
-    assert list(rows[0]) == list(SAMPLE_COLUMNS)
+    assert list(rows[0]) == [
+        *SAMPLE_COLUMNS,
+        "deepseek/deepseek-v3.2/match",
+        "deepseek/deepseek-v3.2/output",
+        "qwen/qwen3.8-27b/match",
+        "qwen/qwen3.8-27b/output",
+    ]
+    assert rows[0]["qwen/qwen3.8-27b/match"] == 2
+    assert rows[0]["qwen/qwen3.8-27b/output"] == ""
+    assert rows[0]["deepseek/deepseek-v3.2/match"] == 1.0
+    assert rows[0]["deepseek/deepseek-v3.2/output"] == "the tools match the reference"
+    assert sample_table_columns(rows) == tuple(rows[0])
     assert rows[0]["sample_id"] == "task-7"
     assert rows[0]["question"] == "Where is Rome?"
     assert rows[0]["final_answer"] == "Rome is in Italy."

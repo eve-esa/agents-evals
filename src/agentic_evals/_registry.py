@@ -9,6 +9,12 @@ Anything imported here is addressable by name, e.g.
 from agentic_evals.agents.langgraph_react import langgraph_react
 from agentic_evals.max_tokens import UncappedMaxTokens as _uncapped_max_tokens
 from agentic_evals.openai_compat import install as _install_openai_compat
+
+# inspect-wandb opens the W&B run in on_task_start. Importing it here registers
+# that hook before WandbCompare, so our hook runs after wandb.init and can name
+# the run. Entry points load this module before inspect-wandb's own.
+import inspect_wandb.models.hooks as _inspect_wandb_models_hooks  # noqa: F401
+
 from agentic_evals.wandb_compare import WandbCompare as _wandb_compare
 from agentic_evals.scorers.judges import trajectory_judge
 from agentic_evals.tasks.earth_bench.scorers import earth_bench_scorer
