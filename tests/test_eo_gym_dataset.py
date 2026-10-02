@@ -18,7 +18,10 @@ def records():
 
 
 def test_prompts_are_verbatim():
-    source = (EO_GYM_ROOT / "eo-gym-evaluation/src/eo_gym_evaluation/prompts.py").read_text()
+    path = EO_GYM_ROOT / "eo-gym-evaluation/src/eo_gym_evaluation/prompts.py"
+    if not path.exists():
+        pytest.skip("EO-Gym checkout missing")
+    source = path.read_text()
     tree = ast.parse(source)
     found = {}
     for node in tree.body:
