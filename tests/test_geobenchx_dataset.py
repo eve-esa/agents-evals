@@ -21,7 +21,7 @@ TUNING = GEOBENCHX_ROOT / "benchmark_set" / "evaluator_tuning_set.json"
 @pytest.fixture(scope="module")
 def samples():
     if not TASKS.exists():
-        pytest.skip("GeoBenchX checkout missing; run `uv run python scripts/fetch_upstream.py geobenchx`")
+        pytest.skip("GeoBenchX checkout missing; run `uv run python scripts/setup_benchmark.py geobenchx`")
     return dataset.load_samples(on=date(2020, 1, 2))
 
 
@@ -95,7 +95,7 @@ def test_task_records_the_pinned_revision():
 
 def test_exported_judge_prompt_keeps_its_placeholders():
     if not GEOBENCHX_JUDGE_PROMPT.exists():
-        pytest.skip("judge prompt not exported; run `uv run python scripts/fetch_upstream.py geobenchx --build-venv`")
+        pytest.skip("judge prompt not exported; run `uv run python scripts/setup_benchmark.py geobenchx`")
     text = GEOBENCHX_JUDGE_PROMPT.read_text(encoding="utf-8")
     for field in ("{task_text}", "{reference_solutions}", "{candidate_solution}", "<MATCH SCORE>", "<MATCH REASONING>"):
         assert field in text
@@ -139,7 +139,7 @@ json.dump({
 def test_solution_code_matches_upstream_get_solution_code():
     python = venv_python(GEOBENCHX_VENV)
     if not python.exists() or not TUNING.exists():
-        pytest.skip("GeoBenchX venv missing; run `uv run python scripts/fetch_upstream.py geobenchx --build-venv`")
+        pytest.skip("GeoBenchX venv missing; run `uv run python scripts/setup_benchmark.py geobenchx`")
     probe = subprocess.run([str(python), "-c", "import pandas, pydantic"], capture_output=True, text=True)
     if probe.returncode != 0:
         pytest.skip(f"GeoBenchX venv cannot import pandas/pydantic yet: {probe.stderr.strip()}")

@@ -36,7 +36,7 @@ def kit_servers(output_dir: Path, *, root: Path = EARTH_AGENT_ROOT, venv: Path =
     python = venv_python(venv)
     if not python.exists():
         raise FileNotFoundError(
-            f"Earth-Agent tools venv not found at {venv}; run `uv run python scripts/fetch_upstream.py earth-agent`"
+            f"Earth-Agent tools venv not found at {venv}; run `uv run python scripts/setup_benchmark.py earth-bench`"
         )
     return {
         kit: {
@@ -85,7 +85,7 @@ def _scalar_str_params(tools_dir: str) -> dict[str, frozenset[str]]:
     if not directory.is_dir():
         raise FileNotFoundError(
             f"Earth-Agent tool sources not found at {directory}; "
-            "run `uv run python scripts/fetch_upstream.py earth-agent --skip-venv`"
+            "run `uv run python scripts/setup_benchmark.py earth-bench --skip-data`"
         )
     found: dict[str, set[str]] = {}
     for path in sorted(directory.glob("*.py")):

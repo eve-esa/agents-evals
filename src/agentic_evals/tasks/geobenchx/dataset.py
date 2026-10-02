@@ -97,7 +97,7 @@ def load_records(root: Path = GEOBENCHX_ROOT) -> list[dict[str, Any]]:
     if not path.exists():
         raise FileNotFoundError(
             f"{path} not found. Fetch GeoBenchX with "
-            "`uv run python scripts/fetch_upstream.py geobenchx`."
+            "`uv run python scripts/setup_benchmark.py geobenchx`."
         )
     return json.loads(path.read_text(encoding="utf-8"))["tasks"]
 

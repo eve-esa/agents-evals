@@ -1,6 +1,6 @@
 """Filesystem locations of fetched upstream benchmarks and run outputs.
 
-Upstream repos are fetched by ``scripts/fetch_upstream.py`` into ``third_party/``.
+Upstream repos are installed by ``scripts/setup_benchmark.py`` into ``third_party/``.
 Each location can be overridden with an environment variable so that hosted
 infrastructure (e.g. the hands-on session) can point at pre-staged copies.
 """

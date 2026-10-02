@@ -1,5 +1,7 @@
 """Fetch pinned upstream benchmarks into third_party/ and build their tool environments.
 
+People should run ``scripts/setup_benchmark.py <benchmark>``, which calls this.
+
 Revisions come from ``upstream.lock.toml``. Nothing fetched here is committed or
 imported by ``agentic_evals``: tool servers run in their own venvs and are
 reached over MCP.

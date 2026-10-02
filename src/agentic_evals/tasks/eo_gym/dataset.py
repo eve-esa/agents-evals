@@ -103,7 +103,7 @@ def allows_missing_images(data_source: str, question: str) -> bool:
 def tool_catalog(path: Path = EO_GYM_TOOLS_JSON) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(
-            f"{path} missing; run `uv run python scripts/fetch_upstream.py eo-gym --build-venv` to export EO-Gym's tool schemas"
+            f"{path} missing; run `uv run python scripts/setup_benchmark.py eo-gym` to export EO-Gym's tool schemas"
         )
     return json.loads(path.read_text())
 
@@ -165,9 +165,8 @@ def eo_gym_dataset(
     """The test split. ``include_images=False`` builds text-only inputs (for not-applicable runs)."""
     if include_images and not (EO_GYM_ROOT / "EO_GYM_DATA").is_dir():
         raise FileNotFoundError(
-            f"{EO_GYM_ROOT / 'EO_GYM_DATA'} not found. Fetch and unzip the EO-Gym data "
-            "(`uv run python scripts/fetch_upstream.py eo-gym --with-data`, then unzip EO_GYM_DATA.zip "
-            "and image_cache.zip in third_party/EO-Gym) or point EO_GYM_ROOT at a pre-staged copy."
+            f"{EO_GYM_ROOT / 'EO_GYM_DATA'} not found. Install EO-Gym with "
+            "`uv run python scripts/setup_benchmark.py eo-gym`, or point EO_GYM_ROOT at a pre-staged copy."
         )
     records = load_records()
     if eo_task:

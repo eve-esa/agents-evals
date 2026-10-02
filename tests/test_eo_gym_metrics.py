@@ -66,10 +66,10 @@ class StubMatcher:
 @pytest.fixture(scope="module")
 def upstream_python():
     if not TEST_SET.exists():
-        pytest.skip("EO-Gym checkout missing; run `uv run python scripts/fetch_upstream.py eo-gym`")
+        pytest.skip("EO-Gym checkout missing; run `uv run python scripts/setup_benchmark.py eo-gym --skip-data`")
     python = venv_python(EO_GYM_VENV)
     if not python.exists():
-        pytest.skip("EO-Gym venv missing; run `uv run python scripts/fetch_upstream.py eo-gym --build-venv`")
+        pytest.skip("EO-Gym venv missing; run `uv run python scripts/setup_benchmark.py eo-gym --skip-data`")
     return python
 
 

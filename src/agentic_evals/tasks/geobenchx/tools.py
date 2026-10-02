@@ -3,7 +3,7 @@
 The server is ``scripts/geobenchx_mcp.py``, run with GeoBenchX's venv. It holds
 the ``data_store`` that their tools pass dataframes through, so a process must
 not be shared across samples. Dataset directories come from ``data_paths.json``
-written by ``fetch_upstream.py geobenchx --with-data``, or from
+written by ``setup_benchmark.py geobenchx``, or from
 ``GEOBENCHX_STATDATA`` / ``GEOBENCHX_GEODATA``.
 """
 
@@ -44,7 +44,7 @@ def judge_prompt() -> str:
     if not GEOBENCHX_JUDGE_PROMPT.exists():
         raise FileNotFoundError(
             f"{GEOBENCHX_JUDGE_PROMPT} not found. Build the GeoBenchX tools venv with "
-            "`uv run python scripts/fetch_upstream.py geobenchx --build-venv`."
+            "`uv run python scripts/setup_benchmark.py geobenchx`."
         )
     return GEOBENCHX_JUDGE_PROMPT.read_text(encoding="utf-8")
 
@@ -56,7 +56,7 @@ def sample_servers(state: TaskState) -> dict[str, dict[str, Any]]:
     if not python.exists():
         raise FileNotFoundError(
             f"GeoBenchX tools venv not found at {GEOBENCHX_VENV}; "
-            "run `uv run python scripts/fetch_upstream.py geobenchx --build-venv`"
+            "run `uv run python scripts/setup_benchmark.py geobenchx`"
         )
     stat, geo = data_directories()
     missing = [path for path in (stat, geo) if not path.is_dir()]
@@ -64,7 +64,7 @@ def sample_servers(state: TaskState) -> dict[str, dict[str, Any]]:
         raise FileNotFoundError(
             "GeoBenchX dataset directories not found "
             f"({', '.join(str(path) for path in missing)}). "
-            "Run `uv run python scripts/fetch_upstream.py geobenchx --with-data` "
+            "Run `uv run python scripts/setup_benchmark.py geobenchx` "
             "or set GEOBENCHX_STATDATA and GEOBENCHX_GEODATA."
         )
     return {

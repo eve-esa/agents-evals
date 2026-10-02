@@ -16,7 +16,7 @@ def _load(path: Path):
 @pytest.fixture(scope="session")
 def earth_agent_root() -> Path:
     if not (EARTH_AGENT_ROOT / "extracted_tool_calls_GT.json").exists():
-        pytest.skip("Earth-Agent checkout missing; run `uv run python scripts/fetch_upstream.py earth-agent --skip-venv`")
+        pytest.skip("Earth-Agent checkout missing; run `uv run python scripts/setup_benchmark.py earth-bench --skip-data`")
     return EARTH_AGENT_ROOT
 
 
