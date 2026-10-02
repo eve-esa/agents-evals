@@ -19,7 +19,11 @@ list, so it is not served.
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
+import signal
+import sys
+from contextlib import asynccontextmanager
 
 os.environ["MPLBACKEND"] = "Agg"
 os.environ.setdefault("STATDATAPATH", os.environ.get("GEOBENCHX_STATDATA", ""))
@@ -31,12 +35,15 @@ import matplotlib
 
 matplotlib.use("Agg", force=True)
 
+import anyio  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
-import mcp.server.stdio  # noqa: E402
 import plotly.io as pio  # noqa: E402
+from io import TextIOWrapper  # noqa: E402
+
 from mcp import types  # noqa: E402
 from mcp.server.lowlevel import NotificationOptions, Server  # noqa: E402
 from mcp.server.models import InitializationOptions  # noqa: E402
+from mcp.shared.message import SessionMessage  # noqa: E402
 
 from agentic_evals.tasks.geobenchx.tools.geobenchx_tools import (  # noqa: E402
     analyze_raster_overlap_tool,
@@ -138,7 +145,9 @@ def build_server() -> Server:
         if tool is None:
             return [types.TextContent(type="text", text=f"Error calling tool '{name}': unknown tool")]
         try:
-            result = tool.func(**(arguments or {}), state=STATE)
+            # The tool is synchronous. Running it on the event loop blocks stdin
+            # close, so the client times out and tears the pipe down mid-write.
+            result = await asyncio.to_thread(tool.func, **(arguments or {}), state=STATE)
         except Exception as exc:  # noqa: BLE001 - the model has to see the failure, as a tool result
             text = f"Error calling tool '{name}': {type(exc).__name__}: {exc}"
         else:
@@ -150,9 +159,64 @@ def build_server() -> Server:
     return server
 
 
+def is_disconnect(exc: BaseException) -> bool:
+    """The client closed the stdio pipe. That is a finished sample, not a crash.
+
+    ``mcp.server.stdio`` only swallows ``ClosedResourceError``. A flush after the
+    client has gone raises ``BrokenPipeError`` from a worker thread, and anyio
+    turns that into an exception group that kills this process.
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        return bool(exc.exceptions) and all(is_disconnect(item) for item in exc.exceptions)
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError, anyio.BrokenResourceError, anyio.ClosedResourceError)):
+        return True
+    return isinstance(exc, OSError) and exc.errno == errno.EPIPE
+
+
+@asynccontextmanager
+async def _stdio_server():
+    """``mcp.server.stdio.stdio_server``, plus a clean exit when the pipe closes."""
+    stdin = anyio.wrap_file(TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace"))
+    stdout = anyio.wrap_file(TextIOWrapper(sys.stdout.buffer, encoding="utf-8"))
+    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
+    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+
+    async def stdin_reader() -> None:
+        try:
+            async with read_stream_writer:
+                async for line in stdin:
+                    try:
+                        message = types.JSONRPCMessage.model_validate_json(line)
+                    except Exception as exc:
+                        await read_stream_writer.send(exc)
+                        continue
+                    await read_stream_writer.send(SessionMessage(message))
+        except BaseException as exc:
+            if not is_disconnect(exc):
+                raise
+            await anyio.lowlevel.checkpoint()
+
+    async def stdout_writer() -> None:
+        try:
+            async with write_stream_reader:
+                async for session_message in write_stream_reader:
+                    payload = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
+                    await stdout.write(payload + "\n")
+                    await stdout.flush()
+        except BaseException as exc:
+            if not is_disconnect(exc):
+                raise
+            await anyio.lowlevel.checkpoint()
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(stdin_reader)
+        tg.start_soon(stdout_writer)
+        yield read_stream, write_stream
+
+
 async def serve() -> None:
     server = build_server()
-    async with mcp.server.stdio.stdio_server() as (read, write):
+    async with _stdio_server() as (read, write):
         await server.run(
             read,
             write,
@@ -164,8 +228,22 @@ async def serve() -> None:
         )
 
 
+def _exit_on_signal(signum: int, frame: object) -> None:
+    del signum, frame
+    # A blocked tool thread would ignore SystemExit and miss the client's
+    # two-second shutdown wait. Leave immediately.
+    os._exit(0)
+
+
 def main() -> None:
-    asyncio.run(serve())
+    signal.signal(signal.SIGTERM, _exit_on_signal)
+    signal.signal(signal.SIGINT, _exit_on_signal)
+    try:
+        asyncio.run(serve())
+    except BaseException as exc:
+        if is_disconnect(exc):
+            return
+        raise
 
 
 if __name__ == "__main__":

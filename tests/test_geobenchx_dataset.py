@@ -115,6 +115,9 @@ def test_mcp_server_exposes_the_agent_tools():
     assert payload["names"][-2:] == ["reject_task", "calculate_column_statistics"]
     assert payload["state_in_schema"] is False
     assert payload["reject"] == "The task is not solvable with the tools and datasets available."
+    assert mcp_server.is_disconnect(BrokenPipeError())
+    assert mcp_server.is_disconnect(BaseExceptionGroup("closed", [BrokenPipeError()]))
+    assert not mcp_server.is_disconnect(RuntimeError("tool failed"))
 
 
 def test_solution_code_matches_upstream_get_solution_code():
