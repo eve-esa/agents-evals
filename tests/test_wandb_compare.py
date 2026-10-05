@@ -1,5 +1,6 @@
 """Summary keys and table rows for the W&B comparison hook. No W&B calls."""
 
+import json
 from types import SimpleNamespace
 
 from inspect_ai._util.registry import registry_find
@@ -12,14 +13,20 @@ from agentic_evals.wandb_compare import (
     dashboard_aliases,
     model_run_name,
     grouped_metrics,
+    _trace_dtype,
+    _trace_value,
+    example_trace_rows,
+    raw_trace,
     render_transcript,
     results_rows,
     sample_rows,
     sample_table_columns,
+    sample_target,
     samples_for_table,
     summary_metrics,
     trace_records,
     trace_rows,
+    trace_table_columns,
 )
 
 
@@ -118,7 +125,12 @@ def test_sample_trace_table() -> None:
     sample = SimpleNamespace(
         id="task-7",
         epoch=1,
-        metadata={"kind": "solvable"},
+        target="",
+        metadata={
+            "kind": "solvable",
+            "reference_solution_description": "Locate Rome.",
+            "reference_solutions": [[{"name": "get_osm_data", "arguments": {"place": "Rome"}}]],
+        },
         scores={
             "geobenchx_steps": SimpleNamespace(
                 value={"tao": 1.0, "tio": 1.0, "tem": 0.5, "param_acc": 0.5}
@@ -170,9 +182,37 @@ def test_sample_trace_table() -> None:
     assert rows[0]["question"] == "Where is Rome?"
     assert rows[0]["final_answer"] == "Rome is in Italy."
     assert "[call get_osm_data]" in rows[0]["transcript"]
+    assert "parameters:" in rows[0]["transcript"]
     assert "[tool get_osm_data]\nok" in rows[0]["transcript"]
+    assert "======== turn 1 | user ========" in rows[0]["transcript"]
     assert rows[0]["kind"] == "solvable"
     assert "get_osm_data" in render_transcript(sample)
+    traces = example_trace_rows([sample])
+    assert trace_table_columns(traces) == (
+        *SAMPLE_COLUMNS,
+        "target",
+        "raw_trace",
+        "readable_trace",
+        "deepseek/deepseek-v3.2/match",
+        "deepseek/deepseek-v3.2/output",
+        "qwen/qwen3.8-27b/match",
+        "qwen/qwen3.8-27b/output",
+    )
+    assert traces[0]["question"] == "Where is Rome?"
+    assert traces[0]["target"] == sample_target(sample)
+    assert "reference 1" in traces[0]["target"]
+    assert "get_osm_data" in traces[0]["target"]
+    assert traces[0]["readable_trace"] == rows[0]["transcript"]
+    assert "======== turn 3 | tool | get_osm_data ========" in traces[0]["readable_trace"]
+    parsed = json.loads(traces[0]["raw_trace"])
+    assert parsed["tool_trace"][0]["name"] == "get_osm_data"
+    assert parsed["turns"][1]["tool_calls"][0]["arguments"] == {"place": "Rome"}
+    assert raw_trace(sample) == traces[0]["raw_trace"]
+    assert _trace_dtype("readable_trace") is str
+    assert _trace_dtype("n_tool_calls") is int
+    assert _trace_dtype("tao") is float
+    assert _trace_value("readable_trace", None) == ""
+    assert _trace_value("tao", None) == 0.0
     assert rows[0]["tao"] == 1.0
     assert rows[0]["match"] == 2
     assert rows[0]["length_diff"] == 0.0
@@ -186,7 +226,12 @@ def test_sample_trace_table() -> None:
     assert calls[1]["output"] == "polygon"
     saved = trace_records([sample])
     assert saved[0]["sample_id"] == "task-7"
+    assert saved[0]["question"] == "Where is Rome?"
+    assert "reference 1" in saved[0]["target"]
     assert len(saved[0]["trace"]) == 2
+    assert saved[0]["readable_trace"].startswith("======== turn 1 | user ========")
+    answered = SimpleNamespace(target="B", metadata={"reference_solutions": [[{"name": "reject_task", "arguments": {}}]]})
+    assert sample_target(answered) == "B"
 
 
 def test_each_class_repeats_the_summary() -> None:

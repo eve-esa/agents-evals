@@ -28,8 +28,10 @@ Logging it again appends a history step, which is why a republished run draws
 a curve. ``{benchmark}/llm_as_judge_avg`` and ``{benchmark}/llm_as_judge_{model}``
 are copies of those means so the agents workspace can chart them next to
 ``open_ended``. The run name is the model checkpoint plus the benchmark
-(``qwen3.8-27b_geobenchx``). The readable trace is the conversation, stored
-on the ``samples`` table.
+(``qwen3.8-27b_geobenchx``). The ``traces`` table is one row per sample,
+logged in that same call: the sample fields, the question, the target, the
+raw tool trace, and the conversation with a marker at each turn. A second
+``run.log`` is not used for it, because that appends a history step.
 
 https://github.com/eve-esa/lm-evaluation-harness/blob/main/lm_eval/loggers/wandb_logger.py
 https://docs.wandb.ai/models/track/log/log-summary
@@ -50,6 +52,7 @@ from agentic_evals.agents.trace_callback import TRACE_KEY
 logger = logging.getLogger(__name__)
 
 SAMPLES_KEY = "samples"
+TRACES_KEY = "traces"
 METRICS_KEY = "metrics_summary"
 METRICS_COLUMNS = ("task", "metric", "value", "stderr", "n")
 SAMPLE_COLUMNS = (
@@ -466,13 +469,84 @@ def trace_records(samples: list[Any] | None) -> list[dict[str, Any]]:
         records.append(
             {
                 "sample_id": _sample_id(sample),
+                "question": _user_question(sample),
+                "target": sample_target(sample),
                 "kind": metadata.get("kind"),
                 "labels": metadata.get("labels"),
-                "transcript": render_transcript(sample),
+                "readable_trace": render_transcript(sample),
                 "trace": _trace_entries(getattr(sample, "store", None)),
             }
         )
     return records
+
+
+def _role(message: Any) -> str:
+    role = getattr(message, "role", None)
+    if role is None and isinstance(message, dict):
+        role = message.get("role")
+    return str(role or "message")
+
+
+def _calls(message: Any) -> list[Any]:
+    calls = getattr(message, "tool_calls", None)
+    if calls is None and isinstance(message, dict):
+        calls = message.get("tool_calls") or []
+    return list(calls or [])
+
+
+def _call_name(call: Any) -> str:
+    if isinstance(call, dict):
+        return str(call.get("function") or call.get("name") or "tool")
+    return str(getattr(call, "function", None) or getattr(call, "name", None) or "tool")
+
+
+def _call_arguments(call: Any) -> Any:
+    if isinstance(call, dict):
+        if "arguments" in call:
+            return call.get("arguments")
+        return call.get("args")
+    return getattr(call, "arguments", None)
+
+
+def _pretty(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, default=str, ensure_ascii=False, indent=2)
+
+
+def _content_blocks(message: Any) -> list[str]:
+    """Text and reasoning the model produced, in order. Images stay as a marker."""
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+    if not isinstance(content, list):
+        text = _message_text(message)
+        return [text] if text else []
+    blocks: list[str] = []
+    for part in content:
+        kind = getattr(part, "type", None) or (part.get("type") if isinstance(part, dict) else None)
+        if kind == "reasoning":
+            text = getattr(part, "reasoning", None)
+            if text is None and isinstance(part, dict):
+                text = part.get("reasoning")
+            if isinstance(text, str) and text.strip():
+                blocks.append(f"[reasoning]\n{text.strip()}")
+        elif kind == "text":
+            text = getattr(part, "text", None)
+            if text is None and isinstance(part, dict):
+                text = part.get("text")
+            if isinstance(text, str) and text.strip():
+                blocks.append(text.strip())
+        elif kind == "image":
+            blocks.append("[image]")
+        elif kind:
+            blocks.append(f"[{kind}]")
+    if blocks:
+        return blocks
+    text = _message_text(message)
+    return [text] if text else []
 
 
 def _message_text(message: Any) -> str:
@@ -487,30 +561,101 @@ def _message_text(message: Any) -> str:
 
 
 def render_transcript(sample: Any) -> str:
-    """The conversation the model produced, including tool calls and their results.
+    """The conversation, one block per turn, with the arguments of each tool call.
 
-    Tool names alone are not the trace. Each assistant turn keeps its text and
-    the calls it made, and each tool message keeps the text the model saw back.
+    A turn starts at ``======== turn N | role ========``. An assistant turn that
+    calls a tool keeps ``[call name]`` and a ``parameters:`` block. A tool
+    result keeps ``[tool name]`` and the text the model saw back. Reasoning
+    parts are marked ``[reasoning]``; images are a marker, not the bytes.
     """
     blocks: list[str] = []
-    for message in getattr(sample, "messages", None) or []:
-        role = str(getattr(message, "role", None) or (message.get("role") if isinstance(message, dict) else "message"))
-        text = _message_text(message)
-        calls = getattr(message, "tool_calls", None)
-        if calls is None and isinstance(message, dict):
-            calls = message.get("tool_calls") or []
-        calls = calls or []
+    for index, message in enumerate(getattr(sample, "messages", None) or [], 1):
+        role = _role(message)
         if role == "tool":
-            name = getattr(message, "function", None) or (message.get("function") if isinstance(message, dict) else None) or "tool"
-            blocks.append(f"[tool {name}]\n{text}")
+            name = getattr(message, "function", None)
+            if name is None and isinstance(message, dict):
+                name = message.get("function")
+            name = name or "tool"
+            text = _message_text(message)
+            blocks.append(f"======== turn {index} | tool | {name} ========\n[tool {name}]\n{text}")
             continue
-        if text:
-            blocks.append(f"[{role}]\n{text}")
-        for call in calls:
-            name = getattr(call, "function", None) or (call.get("function") if isinstance(call, dict) else None) or "tool"
-            args = getattr(call, "arguments", None) if not isinstance(call, dict) else call.get("arguments")
-            blocks.append(f"[call {name}]\n{_text_cell(args)}")
+        lines = [f"======== turn {index} | {role} ========"]
+        lines.extend(_content_blocks(message))
+        for call in _calls(message):
+            lines.append(f"[call {_call_name(call)}]\nparameters:\n{_pretty(_call_arguments(call))}")
+        blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
+
+
+def _raw_turns(sample: Any) -> list[dict[str, Any]]:
+    """One JSON object per message: role, text, and tool-call arguments."""
+    turns: list[dict[str, Any]] = []
+    for message in getattr(sample, "messages", None) or []:
+        role = _role(message)
+        turn: dict[str, Any] = {"role": role, "text": _message_text(message)}
+        if role == "tool":
+            name = getattr(message, "function", None)
+            if name is None and isinstance(message, dict):
+                name = message.get("function")
+            turn["name"] = name or "tool"
+        calls = [
+            {"name": _call_name(call), "arguments": _call_arguments(call)} for call in _calls(message)
+        ]
+        if calls:
+            turn["tool_calls"] = calls
+        turns.append(turn)
+    return turns
+
+
+def raw_trace(sample: Any) -> str:
+    """JSON of the conversation turns and the tool-call trace from the sample store."""
+    payload = {
+        "turns": _raw_turns(sample),
+        "tool_trace": _trace_entries(getattr(sample, "store", None)),
+    }
+    return json.dumps(payload, default=str, ensure_ascii=False, indent=2)
+
+
+def sample_target(sample: Any) -> str:
+    """The scored answer, or the reference solution when that answer is empty.
+
+    Inspect stores the answer on ``target``. GeoBenchX leaves it empty and
+    keeps the reference calls in metadata (Krechetova & Kochedykov, Section 5);
+    those calls are what the judge compares, so they fill this cell.
+    """
+    target = getattr(sample, "target", None)
+    if isinstance(target, list):
+        text = "\n".join(str(item) for item in target if item not in (None, ""))
+    else:
+        text = _text_cell(target).strip()
+    if text:
+        return text
+    metadata = getattr(sample, "metadata", None) or {}
+    parts: list[str] = []
+    description = metadata.get("reference_solution_description")
+    if isinstance(description, str) and description.strip():
+        parts.append(description.strip())
+    solutions = metadata.get("reference_solutions")
+    if isinstance(solutions, list) and solutions:
+        for index, solution in enumerate(solutions, 1):
+            steps = solution if isinstance(solution, list) else []
+            lines = [f"reference {index}"]
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                lines.append(f"  {step.get('name')}({_text_cell(step.get('arguments'))})")
+            parts.append("\n".join(lines))
+    if parts:
+        return "\n\n".join(parts)
+    for key in ("gold_tool_calls", "gold_steps", "reference_trajectory"):
+        gold = metadata.get(key)
+        if gold:
+            return json.dumps(gold, default=str, ensure_ascii=False, indent=2)
+    for key in ("answer_gt_file", "answer_question_json"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
 
 
 def _user_question(sample: Any) -> str:
@@ -606,6 +751,65 @@ def sample_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
     )
     extra = tuple(column for slug in slugs for column in (f"{slug}/match", f"{slug}/output"))
     return SAMPLE_COLUMNS + extra
+
+
+def trace_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Sample columns, then target and the two trace texts, then each judge."""
+    sample_cols = sample_table_columns(rows)
+    judges = sample_cols[len(SAMPLE_COLUMNS) :]
+    return SAMPLE_COLUMNS + ("target", "raw_trace", "readable_trace") + judges
+
+
+_TRACE_TEXT = frozenset(
+    {
+        "sample_id",
+        "question",
+        "final_answer",
+        "transcript",
+        "kind",
+        "tool_trace",
+        "target",
+        "raw_trace",
+        "readable_trace",
+    }
+)
+
+
+def _trace_dtype(column: str) -> type:
+    """Concrete cell type. A null-only column is typed ``unknown`` and the viewer shows no rows."""
+    if column == "n_tool_calls":
+        return int
+    if column in _TRACE_TEXT or column.endswith("/output"):
+        return str
+    return float
+
+
+def _trace_value(column: str, value: Any) -> Any:
+    """A filled cell. ``optional=False`` rejects None, which is what leaves the viewer empty."""
+    kind = _trace_dtype(column)
+    if kind is str:
+        if value is None:
+            return ""
+        return value if isinstance(value, str) else _text_cell(value)
+    if value is None:
+        return kind(0)
+    return kind(value)
+
+
+def example_trace_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
+    """One row per sample: the samples-table fields, plus target and both traces.
+
+    ``readable_trace`` is the turn-marked conversation. ``raw_trace`` is the
+    same turns and the store's tool calls as JSON.
+    """
+    rows: list[dict[str, Any]] = []
+    for sample, base in zip(samples or [], sample_rows(samples), strict=True):
+        row = dict(base)
+        row["target"] = sample_target(sample)
+        row["raw_trace"] = raw_trace(sample)
+        row["readable_trace"] = row["transcript"]
+        rows.append(row)
+    return rows
 
 
 def _sample_id(sample: Any) -> str:
@@ -732,10 +936,17 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
     # One history row for the whole block, including class splits and judge
     # stats. A second log appends a step.
     rows = sample_rows(samples)
+    traces = example_trace_rows(samples)
+    trace_columns = trace_table_columns(traces)
     run.log(
         {
             **summary,
             SAMPLES_KEY: _as_table(sample_table_columns(rows), rows),
+            TRACES_KEY: _as_table(
+                trace_columns,
+                [{column: _trace_value(column, row.get(column)) for column in trace_columns} for row in traces],
+                tuple(_trace_dtype(column) for column in trace_columns),
+            ),
             METRICS_KEY: _as_table(METRICS_COLUMNS, results_rows(scores, benchmark)),
         }
     )
