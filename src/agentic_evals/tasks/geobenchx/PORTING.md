@@ -1,8 +1,8 @@
 # GeoBenchX tool port
 
-Source: [Solirinai/GeoBenchX](https://github.com/Solirinai/GeoBenchX) at `0edf6109ea5dca3e70fdfe081d39c9ccd0f832fb` (MIT, copyright Varvara Krechetova 2025; see `assets/LICENSE-GeoBenchX`).
+Source: [Solirinai/GeoBenchX](https://github.com/Solirinai/GeoBenchX) at `0edf6109ea5dca3e70fdfe081d39c9ccd0f832fb` (MIT, copyright Varvara Krechetova 2025; see `LICENSE`).
 
-`tools/geobenchx_tools.py` is `geobenchx/tools.py` from that revision. `assets/` holds `tasks_and_reference_solutions.json`, `evaluator_tuning_set.json`, and the judge prompt exported once from `geobenchx.evaluation.RESULT_CHECKING_PROMPT` at that revision. A verbatim copy of the modules our solution-code check executes is in `tests/fixtures/geobenchx/upstream`.
+`tools/geobenchx_tools.py` is `geobenchx/tools.py` from that revision. `data/` holds `tasks_and_reference_solutions.json` and `evaluator_tuning_set.json`. `prompts/judge_prompt.txt` is `geobenchx.evaluation.RESULT_CHECKING_PROMPT` from that revision. A verbatim copy of the modules our solution-code check executes is in `tests/fixtures/geobenchx/upstream`.
 
 ## Modifications
 

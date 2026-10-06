@@ -1,27 +1,33 @@
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 import pytest
 
-from agentic_evals.paths import EO_GYM_ROOT, EO_GYM_TOOLS_JSON
 from agentic_evals.tasks.eo_gym import dataset
 
 pytestmark = pytest.mark.upstream
 
+PROMPTS = (
+    Path(__file__).resolve().parent
+    / "fixtures"
+    / "eo_gym"
+    / "upstream"
+    / "eo-gym-evaluation"
+    / "src"
+    / "eo_gym_evaluation"
+    / "prompts.py"
+)
+
 
 @pytest.fixture(scope="module")
 def records():
-    if not (EO_GYM_ROOT / "datasets" / "eo_gym_test_set.jsonl").exists():
-        pytest.skip("EO-Gym checkout missing")
     return dataset.load_records()
 
 
 def test_prompts_are_verbatim():
-    path = EO_GYM_ROOT / "eo-gym-evaluation/src/eo_gym_evaluation/prompts.py"
-    if not path.exists():
-        pytest.skip("EO-Gym checkout missing")
-    source = path.read_text()
+    source = PROMPTS.read_text()
     tree = ast.parse(source)
     found = {}
     for node in tree.body:
@@ -34,7 +40,6 @@ def test_prompts_are_verbatim():
     assert found["COMPLEX_PROMPT"] == dataset.COMPLEX_PROMPT
 
 
-@pytest.mark.skipif(not EO_GYM_TOOLS_JSON.exists(), reason="tool schemas not exported")
 def test_samples(records):
     assert len(records) == 1436
     by_id = {r["id"]: r for r in records}

@@ -4,9 +4,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# EO-Gym stays a fetched checkout. Earth-Bench and GeoBenchX bulk files live in data/.
-third_party/
-data/
+# Downloaded rasters, the GeoBenchX archive, EO-Gym imagery, and the EO-Gym server venv.
+# Anchored to the repo root so tasks/<benchmark>/data/ (committed JSON) stays tracked.
+/data/
 
 # Inspect logs and per-sample tool outputs.
 logs/

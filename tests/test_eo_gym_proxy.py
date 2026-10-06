@@ -8,9 +8,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import httpx
-import pytest
 
-from agentic_evals.paths import EO_GYM_TOOLS_JSON
 from agentic_evals.tasks.eo_gym.tools.mcp_proxy import execute_output, new_image_ref
 from agentic_evals.tasks.eo_gym.tools import proxy_servers
 
@@ -40,7 +38,6 @@ def test_execute_output_mirrors_driver():
     assert new_image_ref("basic_calculator", '{"cropped_path": "x"}') is None
 
 
-@pytest.mark.skipif(not EO_GYM_TOOLS_JSON.exists(), reason="tool schemas not exported")
 def test_proxy_round_trip():
     from langchain_mcp_adapters.client import MultiServerMCPClient
 

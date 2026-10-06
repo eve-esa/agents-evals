@@ -80,3 +80,7 @@ def test_openrouter_ignore_is_the_provider_body():
     assert openrouter_extra_body("deepinfra, venice") == {
         "provider": {"ignore": ["deepinfra", "venice"], "allow_fallbacks": True}
     }
+    assert openrouter_extra_body(only="Venice") == {
+        "provider": {"only": ["venice"], "allow_fallbacks": False}
+    }
+    assert openrouter_extra_body("parasail", only="venice")["provider"]["only"] == ["venice"]

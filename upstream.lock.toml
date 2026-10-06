@@ -1,11 +1,9 @@
-# Pinned upstream benchmark sources. Fetched by scripts/fetch_upstream.py into
-# third_party/ (gitignored). Changing a revision here changes the benchmark
-# version recorded in every run, so do it deliberately.
+# Pinned benchmark revisions. Code from these revisions is copied into this
+# repo (see each task's PORTING.md). This file now records the revision and,
+# where a run still downloads bulk files, the dataset coordinates. Changing a
+# revision here changes the benchmark version recorded in every run.
 
 [earth_agent]
-# Code, question.json, extracted_tool_calls_GT.json, published trajectories and
-# the five fastmcp tool kits (agent/tools/).
-repo = "https://github.com/opendatalab/Earth-Agent.git"
 rev = "ca1dfaef750654331308a434966d307f1728fd90"
 
 [earth_bench_data]
@@ -15,32 +13,17 @@ repo_type = "dataset"
 revision = "49ce6b784c038b63b0817cbfa8211eb053b47e37"
 
 [eo_gym]
-# Code and data live in a single Hugging Face dataset repo.
+# Imagery and lookup tables. The server, test split, and tool schemas are in
+# src/agentic_evals/tasks/eo_gym.
 repo_id = "paperuploadacount/EO-Gym"
 repo_type = "dataset"
 revision = "d168c28e870ccbf75f63ce60d087420a6babed9e"
-# Small files needed to build the task and run the scorers.
-code_patterns = [
-    "pyproject.toml",
-    "uv.lock",
-    "config/*",
-    "scripts/*",
-    "src/**",
-    "datasets/eo_gym_test_set.jsonl",
-    "index_files/*",
-    "eo-gym-evaluation/**",
-    "eo-gym-data-synthesis/**",
-]
-# The bulk data (~47 GB). Only fetched with --with-data.
 data_patterns = [
     "EO_GYM_DATA.zip",
     "image_cache.zip",
+    "index_files/*",
 ]
 
 [geobenchx]
-# Code, benchmark_set/*.json, and the 24 LangGraph tools (geobenchx/tools.py).
-# Datasets are a Google Drive archive (data/README.md), fetched with --with-data.
-repo = "https://github.com/Solirinai/GeoBenchX.git"
 rev = "0edf6109ea5dca3e70fdfe081d39c9ccd0f832fb"
 drive_file_id = "10hLDCTMnaMAXyUCxFjUt4iK7tX9XyXZu"
-
