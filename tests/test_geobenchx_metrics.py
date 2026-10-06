@@ -21,6 +21,7 @@ from agentic_evals.tasks.geobenchx.scorers import (
     match_values,
     median,
     merged_match,
+    panel_rate,
     retry_delay,
 )
 
@@ -98,11 +99,14 @@ def test_by_kind_and_median():
             SampleScore(score=Score(value=1.0), sample_metadata={"kind": "solvable"}),
             SampleScore(score=Score(value=0.0), sample_metadata={"kind": "solvable"}),
             SampleScore(score=Score(value=1.0), sample_metadata={"kind": "unsolvable"}),
+            SampleScore(score=Score(value=1.0), sample_metadata={"kind": "control"}),
         ]
     )
     assert grouped["solvable"] == 0.5
     assert grouped["unsolvable"] == 1.0
-    assert math.isnan(grouped["control"])
+    assert grouped["control"] == 1.0
+    # The paper's 123-task column is solvable plus control.
+    assert grouped["solvable_incl_control"] == (1.0 + 0.0 + 1.0) / 3
     assert median()(
         [SampleScore(score=Score(value=value)) for value in (1.0, 3.0, 2.0, 4.0)]
     ) == {"median": 2.5}
@@ -129,31 +133,83 @@ def test_only_an_expired_or_timed_out_400_is_retried_outside_inspect():
     assert not is_expired_request(_Err("upstream connect error", status_code=502))
 
 
-def test_match_values_are_named_with_the_judge():
+def test_match_values_are_indicators_named_with_the_judge():
     values = match_values("openai-api/openrouter/qwen/qwen3.8-27b", 2, 0.5)
     assert display_model_id("openai-api/openrouter/qwen/qwen3.8-27b") == "qwen/qwen3.8-27b"
-    assert values == {"qwen/qwen3.8-27b/match": 2, "qwen/qwen3.8-27b/length_diff": 0.5}
+    assert values == {
+        "qwen/qwen3.8-27b/no_match": 0.0,
+        "qwen/qwen3.8-27b/partial": 0.0,
+        "qwen/qwen3.8-27b/match": 1.0,
+        "qwen/qwen3.8-27b/length_diff": 0.5,
+    }
+    partial = match_values("a", 1, 0.0)
+    assert partial["a/partial"] == 1.0 and partial["a/match"] == 0.0 and partial["a/no_match"] == 0.0
     # Inspect expands metric globs with re.compile(fnmatch.translate(...)).
     match_key = re.compile(fnmatch.translate("*/match"))
     assert match_key.match("qwen/qwen3.8-27b/match")
+    assert match_key.match("qwen/qwen3.8-27b/no_match") is None
     assert match_key.match("qwen/qwen3.8-27b/length_diff") is None
+    assert re.compile(fnmatch.translate("*/no_match")).match("qwen/qwen3.8-27b/no_match")
     missing = match_values("grader", None, 1.0)
     assert math.isnan(missing["grader/match"])
+    assert math.isnan(missing["grader/partial"])
+    assert math.isnan(missing["grader/no_match"])
     assert missing["grader/length_diff"] == 1.0
 
 
-def test_merged_match_skips_nan_and_does_not_average_length():
+def test_merged_match_averages_indicators_and_skips_nan():
     qwen = match_values("qwen/qwen3.8-27b", 2, 0.5)
     llama = match_values("meta-llama/llama-4-maverick", None, 0.5)
     merged = merged_match([qwen, llama])
-    assert merged == {"merged/match": 2.0}
+    assert merged["merged/match"] == 1.0
+    assert merged["merged/partial"] == 0.0
+    assert merged["merged/no_match"] == 0.0
     assert "merged/length_diff" not in merged
     both = merged_match([match_values("a", 2, 0.0), match_values("b", 0, 1.0)])
-    assert both["merged/match"] == 1.0
-    assert "merged/length_diff" not in both
+    assert both["merged/match"] == 0.5
+    assert both["merged/no_match"] == 0.5
+    assert both["merged/partial"] == 0.0
     empty = merged_match([])
     assert math.isnan(empty["merged/match"])
     assert "merged/length_diff" not in empty
+
+
+def _verdict_sample(verdicts: dict[str, int], kind: str = "solvable") -> SampleScore:
+    return SampleScore(
+        score=Score(value={"match": 0.0}, metadata={"verdicts": verdicts}),
+        sample_metadata={"kind": kind},
+    )
+
+
+def test_shares_match_generate_eval_stats_frequencies():
+    # generate_eval_stats: frequency = count / n, full precision (they round only when printing).
+    verdicts = [2, 2, 1, 0, 0]
+    samples = [_verdict_sample({"judge": verdict}) for verdict in verdicts]
+    shares = panel_rate("match")(samples)
+    assert shares["mean"] == 2 / 5
+    assert panel_rate("partial")(samples)["mean"] == 1 / 5
+    assert panel_rate("no_match")(samples)["mean"] == 2 / 5
+    assert shares["solvable"] == 2 / 5
+    assert math.isnan(shares["unsolvable"])
+
+
+def test_panel_share_weights_each_judge_once_when_one_skips_a_task():
+    # Judge A scored both tasks (shares 0.5). Judge B scored only the first (share 1).
+    # Section 5.2 averages those shares: 0.75. The mean of the per-task averages is 0.5.
+    samples = [
+        _verdict_sample({"a": 2, "b": 2}),
+        _verdict_sample({"a": 0}),
+    ]
+    assert panel_rate("match")(samples)["mean"] == 0.75
+    assert panel_rate("no_match")(samples)["mean"] == 0.25
+    paper = [
+        _verdict_sample({"a": 2}, "solvable"),
+        _verdict_sample({"a": 0}, "control"),
+        _verdict_sample({"a": 0}, "unsolvable"),
+    ]
+    grouped = panel_rate("match")(paper)
+    assert grouped["solvable_incl_control"] == 0.5
+    assert grouped["unsolvable"] == 0.0
 
 
 def test_reject_task_after_other_calls_is_not_a_perfect_prefix():

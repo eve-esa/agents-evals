@@ -30,13 +30,14 @@ whose context is 256k. Parasail is 131072 and rejects a prompt that long.
 Venice and DeepInfra return HTTP 400 when a tool name is ``reject_task`` plus
 trailing whitespace; the agent strips that whitespace before the next call.
 
-The official scores are the match judgment (0/1/2) and ``length_diff``.
-Each judge is a separate result row named with its checkpoint id, without the
-``openai-api`` provider prefix. ``geobenchx_merged`` is the mean of those
-judges on each sample; it is not a vote and not part of their protocol.
-``geobenchx_steps`` (TAO, TIO, TEM, parameter accuracy) is reported alongside
-and is not part of their protocol either. It is the headline, because the
-viewer summary shows three score rows and those are the tool averages.
+The official scores are the shares of no match, partial, and match
+(Krechetova & Kochedykov, Section 6.1; ``generate_eval_stats``) and
+``length_diff``. Each judge is a separate result row named with its
+checkpoint id, without the ``openai-api`` provider prefix. The panel share
+is the unweighted mean of those shares (Section 5.2), reported by
+``geobenchx_panel``. ``geobenchx_merged`` averages the indicators on one
+sample and is not that panel number. ``geobenchx_steps`` (TAO, TIO, TEM,
+parameter accuracy) is reported alongside and is not part of their protocol.
 The paper's judge panel is Claude Sonnet 3.5 (``claude-3-5-sonnet-20241022``),
 GPT-4.1 (``gpt-4.1-2025-04-14``, the model that scored
 ``evaluator_tuning_set.json``) and Gemini 2.5 Pro Preview
@@ -63,6 +64,7 @@ from agentic_evals.tasks.geobenchx.scorers import (
     JUDGE_STREAM_IDLE_TIMEOUT,
     extra_match_judges,
     geobenchx_merged,
+    geobenchx_panel,
     geobenchx_scorer,
     geobenchx_steps,
 )
@@ -148,11 +150,13 @@ def geobenchx(
             geobenchx_scorer(),
             *extra_match_judges(judges),
             geobenchx_merged(),
+            geobenchx_panel(),
             *extra_judges(trajectory_judges),
         ],
         # Inspect view's summary shows the headline scorer's rows, three of
-        # them (ResultsPanel, kMaxPrimaryScoreRows). TAO/TIO/TEM are that strip.
-        headline_metric="geobenchx_steps.tao",
+        # them (ResultsPanel, kMaxPrimaryScoreRows). Those rows are the
+        # panel shares, in the paper's table order.
+        headline_metric="geobenchx_panel.match",
         config=GenerateConfig(
             temperature=0,
             max_retries=JUDGE_MAX_RETRIES,

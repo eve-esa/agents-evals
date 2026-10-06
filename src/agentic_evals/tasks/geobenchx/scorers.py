@@ -1,20 +1,27 @@
 """GeoBenchX scorers.
 
-Official protocol (arXiv:2503.18129 Section 5; ``geobenchx/evaluation.py``):
-``geobenchx_scorer`` renders the trace with ``get_solution_code`` and asks one
-judge for a match score of 0, 1, or 2. Each judge is its own scorer. There is
-no majority vote: the released code records a single ``evaluator_model``, and
-the paper's panel is three such runs. The default judge is Inspect's ``grader``
-role. ``length_diff`` is computed whether or not the judge answers.
+Official protocol (arXiv:2503.18129 Section 5 and 6.1; ``geobenchx/evaluation.py``
+``generate_eval_stats``): ``geobenchx_scorer`` renders the trace with
+``get_solution_code`` and asks one judge for a match score of 0 (no match),
+1 (partial), or 2 (match). Each judge is its own scorer. The published
+aggregate is the share of each of those three scores, ``count / n`` over the
+tasks that judge scored. Section 5.2 averages those shares across judges,
+each judge one term. A skipped task stays out of that judge's denominator.
+There is no majority vote, and the mean of the raw 0/1/2 scores is not a
+published number. The default judge is Inspect's ``grader`` role.
+``length_diff`` is computed whether or not the judge answers.
 
 Score keys use the checkpoint id (``qwen/qwen3.8-27b/match``), without the
 ``openai-api`` provider prefix, because Inspect names each dict-metric row
 after the key (``inspect_ai._eval.task.results.scorers_from_metric_dict``).
-The viewer's summary shows three of those rows, so a sample stores match and
-``length_diff`` only; the 0/1/2 frequencies are metrics of the match row.
-Averages follow ``generate_eval_stats``: mean match, those frequencies, and
-mean/median ``length_diff``, plus Inspect's standard error and confidence
-interval.
+A sample stores a 0/1 indicator for each category, so ``mean()`` is the
+share from ``generate_eval_stats``. The raw 0, 1, or 2 stays on ``answer``
+and in score metadata. The viewer's three summary rows are
+``geobenchx_panel`` (no match, partial, match): the unweighted mean of the
+judges' shares. Wilson's interval (Wilson, E.B., 1927, "Probable inference")
+is Inspect's ``ci_wilson``, used because the indicators are in {0, 1}.
+Upstream's interval is ``scipy.stats.binomtest``, which this project does
+not depend on.
 
 The judge call uses Inspect's exponential backoff (``model_retry_config``:
 ``wait_exponential_jitter``, initial 3s, cap 30 min) with ``max_retries=6``.
@@ -24,8 +31,9 @@ quiet; it is not a wall-clock cap on a long generation
 request expired is not classified as retryable by ``openai_classify_retry``,
 so those are retried here.
 
-``geobenchx_merged`` is the mean of the judges on one sample. It is not a vote
-and not part of the published protocol. ``geobenchx_steps`` is our addition;
+``geobenchx_merged`` averages the indicators on one sample. That run mean
+equals Section 5.2 only when every judge scored every task, so it is not the
+panel number. ``geobenchx_panel`` is. ``geobenchx_steps`` is our addition;
 see ``metrics.step_scores``.
 """
 
@@ -45,6 +53,7 @@ from inspect_ai.scorer import (
     Score,
     Target,
     ci,
+    ci_wilson,
     mean,
     metric,
     scorer,
@@ -106,51 +115,80 @@ def display_model_id(model_id: str) -> str:
     return model_id
 
 
+# Table order in Krechetova & Kochedykov, Section 6: no match, partial, match.
+SHARE_CATEGORIES = ("no_match", "partial", "match")
+_VERDICT_FOR = {"no_match": 0, "partial": 1, "match": 2}
+# The paper's solvable column (123 tasks) is our solvable (120) plus control (3).
+PAPER_SOLVABLE = "solvable_incl_control"
+
+
 def match_values(model_id: str, verdict: int | None, diff: float) -> dict[str, float]:
     """One judge's score dict. Keys are what the results table shows as the row name.
 
-    Success, partial, and no-match are not stored per sample. They are the
-    frequencies of match values 2, 1, and 0, reported by ``verdict_rates``.
+    Each category is 1 only for its verdict, so the mean of a key is that
+    category's share (``generate_eval_stats``). A missing verdict is NaN on
+    all three, which Inspect leaves out of the mean, so a failure is not a
+    no-match. The raw 0/1/2 is not stored here.
     """
     name = display_model_id(model_id)
-    match = math.nan if verdict is None else float(verdict)
-    return {
-        f"{name}/match": match,
-        f"{name}/length_diff": diff,
-    }
+    values: dict[str, float] = {}
+    for category, code in _VERDICT_FOR.items():
+        if verdict is None:
+            values[f"{name}/{category}"] = math.nan
+        else:
+            values[f"{name}/{category}"] = float(verdict == code)
+    values[f"{name}/length_diff"] = diff
+    return values
 
 
 def merged_match(judge_values: list[dict[str, Any]]) -> dict[str, float]:
-    """Mean of the judges' match fields. NaNs are left out. ``length_diff`` is not averaged.
+    """Mean of the judges' indicators on one sample. NaNs are left out.
 
-    An arithmetic mean of the per-judge scores, not a majority vote. GeoBenchX
-    records one ``evaluator_model`` per run (``generate_eval_stats``).
+    This is not Section 5.2. That average is taken over each judge's share,
+    and the two agree only when every judge scored every task. ``length_diff``
+    is not averaged.
     """
-    numbers: list[float] = []
+    buckets: dict[str, list[float]] = {category: [] for category in SHARE_CATEGORIES}
     for values in judge_values:
         for key, value in values.items():
-            if not str(key).endswith("/match") or str(key).startswith("merged/"):
+            text = str(key)
+            if text.startswith("merged/"):
                 continue
-            if isinstance(value, int | float) and not math.isnan(float(value)):
-                numbers.append(float(value))
-    return {"merged/match": sum(numbers) / len(numbers) if numbers else math.nan}
+            for category in SHARE_CATEGORIES:
+                if not text.endswith("/" + category):
+                    continue
+                if isinstance(value, int | float) and not math.isnan(float(value)):
+                    buckets[category].append(float(value))
+    return {
+        f"merged/{category}": (sum(numbers) / len(numbers) if numbers else math.nan)
+        for category, numbers in buckets.items()
+    }
 
 
-def _level_stats() -> list[Metric]:
-    # mean/median length and match: generate_eval_stats. stderr and ci are
-    # Inspect's (95% t interval). Their binomial interval is scipy binomtest,
-    # which this project does not depend on.
+def _rate_metrics() -> list[Metric]:
+    # mean of a 0/1 indicator is the share. ci_wilson is the [0, 1] interval
+    # (Wilson 1927). stderr is Inspect's. by_kind splits the same share.
+    return [mean(), stderr(), ci_wilson(), by_kind()]
+
+
+def _length_metrics() -> list[Metric]:
+    # mean and median: generate_eval_stats. stderr and ci are Inspect's
+    # (95% t interval). Their binomial interval does not apply to a signed ratio.
     return [mean(), median(), stderr(), ci(), by_kind()]
 
 
 def _match_metrics() -> dict[str, list[Metric]]:
-    # Frequencies of 2, 1, and 0 live on the match row (verdict_rates), so they
-    # do not become extra score rows. The viewer summary shows three rows
-    # (inspect view ResultsPanel, kMaxPrimaryScoreRows).
     return {
-        "*/match": [*_level_stats(), verdict_rates()],
-        "*/length_diff": _level_stats(),
+        "*/no_match": _rate_metrics(),
+        "*/partial": _rate_metrics(),
+        "*/match": _rate_metrics(),
+        "*/length_diff": _length_metrics(),
     }
+
+
+def _merged_metrics() -> dict[str, list[Metric]]:
+    # The mean of these per-sample averages is not the panel share.
+    return {f"merged/{category}": [mean()] for category in SHARE_CATEGORIES}
 
 
 def _parse_args(arguments: Any) -> Any:
@@ -182,33 +220,56 @@ def predicted_calls(state: TaskState) -> tuple[list[dict[str, Any]], str]:
     return calls, "messages"
 
 
-@metric
-def verdict_rates() -> Metric:
-    """Share of match scores that are 2, 1, and 0.
+def panel_share(scores: list[SampleScore], category: str, kinds: set[str] | None = None) -> float:
+    """Unweighted mean of each judge's share of ``category``.
 
-    ``generate_eval_stats`` reports these as success, partial, and no-match
-    frequencies. Wilson's interval is not attached here; ``ci_wilson`` rejects
-    values outside [0, 1] and the match itself is in {0, 1, 2}.
-    Wilson, E.B. (1927), "Probable inference", is what ``ci_wilson`` implements
-    for the [0, 1] rates elsewhere in Inspect.
+    Section 5.2. A judge's share is ``count / n`` over the tasks in ``kinds``
+    that judge scored (``generate_eval_stats``). A task that judge skipped
+    is left out of that denominator and does not change the other judges.
+    Verdicts are read from score metadata, not from the placeholder value.
+    """
+    target = _VERDICT_FOR[category]
+    by_judge: dict[str, list[int]] = {}
+    for sample in scores:
+        kind = str((sample.sample_metadata or {}).get("kind", ""))
+        if kinds is not None and kind not in kinds:
+            continue
+        verdicts = (sample.score.metadata or {}).get("verdicts")
+        if not isinstance(verdicts, dict):
+            continue
+        for judge, verdict in verdicts.items():
+            if isinstance(verdict, bool) or not isinstance(verdict, int):
+                continue
+            by_judge.setdefault(str(judge), []).append(verdict)
+    shares = [sum(verdict == target for verdict in values) / len(values) for values in by_judge.values() if values]
+    if not shares:
+        return math.nan
+    return sum(shares) / len(shares)
+
+
+@metric
+def panel_rate(category: str) -> Metric:
+    """Section 5.2 panel share for one category, overall and by task kind.
+
+    The returned ``mean`` is the panel share. Inspect labels a dict metric
+    by its key, so the results row shows ``mean`` rather than the package
+    prefix (``scorers_from_metric_dict``).
     """
 
     def compute(scores: list[SampleScore]) -> dict[str, float]:
-        values = [
-            float(sample.score.value)
-            for sample in scores
-            if isinstance(sample.score.value, int | float) and not math.isnan(float(sample.score.value))
-        ]
-        if not values:
-            return {"success": math.nan, "partial": math.nan, "no_match": math.nan}
-        count = len(values)
         return {
-            "success": sum(value == 2 for value in values) / count,
-            "partial": sum(value == 1 for value in values) / count,
-            "no_match": sum(value == 0 for value in values) / count,
+            "mean": panel_share(scores, category),
+            "solvable": panel_share(scores, category, {"solvable"}),
+            "unsolvable": panel_share(scores, category, {"unsolvable"}),
+            "control": panel_share(scores, category, {"control"}),
+            PAPER_SOLVABLE: panel_share(scores, category, {"solvable", "control"}),
         }
 
     return compute
+
+
+def _panel_metrics() -> dict[str, list[Metric]]:
+    return {category: [panel_rate(category)] for category in SHARE_CATEGORIES}
 
 
 @metric
@@ -235,17 +296,29 @@ def median() -> Metric:
 def by_kind() -> Metric:
     """Mean of this score key within ``solvable``, ``unsolvable``, and ``control``.
 
-    The paper's solvable column (123 tasks) is our ``solvable`` (120) plus
-    ``control`` (3).
+    ``solvable_incl_control`` is the paper's solvable column: our solvable
+    (120) plus control (3), 123 tasks. On a 0/1 indicator the mean is the
+    share inside that subset.
     """
 
     def compute(scores: list[SampleScore]) -> dict[str, float]:
-        buckets: dict[str, list[float]] = {"solvable": [], "unsolvable": [], "control": []}
+        buckets: dict[str, list[float]] = {
+            "solvable": [],
+            "unsolvable": [],
+            "control": [],
+            PAPER_SOLVABLE: [],
+        }
         for sample in scores:
             kind = str((sample.sample_metadata or {}).get("kind", ""))
             value = sample.score.value
-            if kind in buckets and isinstance(value, int | float) and not math.isnan(float(value)):
-                buckets[kind].append(float(value))
+            if kind not in ("solvable", "unsolvable", "control"):
+                continue
+            if not isinstance(value, int | float) or math.isnan(float(value)):
+                continue
+            number = float(value)
+            buckets[kind].append(number)
+            if kind in ("solvable", "control"):
+                buckets[PAPER_SOLVABLE].append(number)
         return {kind: (sum(values) / len(values) if values else math.nan) for kind, values in buckets.items()}
 
     return compute
@@ -330,6 +403,7 @@ def geobenchx_scorer(model: str | None = None):
         verdict, reasoning = metrics.parse_verdict(result.completion or "")
         if verdict is None:
             return _nan_match(model_id, reasoning, diff, details)
+        details["verdict"] = verdict
         return Score(
             value=match_values(model_id, verdict, diff),
             answer=str(verdict),
@@ -356,32 +430,70 @@ def _judge_scores(state: TaskState) -> list[dict[str, Any]]:
     return found
 
 
-@scorer(metrics=_match_metrics())
+def judge_verdicts(state: TaskState) -> dict[str, int]:
+    """Raw 0/1/2 for each judge that answered this sample, keyed by checkpoint id."""
+    found: dict[str, int] = {}
+    for existing in (state.scores or {}).values():
+        metadata = existing.metadata or {}
+        if metadata.get("judge_prompt") != JUDGE_PROMPT_NAME:
+            continue
+        verdict = metadata.get("verdict")
+        if isinstance(verdict, bool) or not isinstance(verdict, int):
+            continue
+        value = existing.value if isinstance(existing.value, dict) else {}
+        for key in value:
+            text = str(key)
+            if text.endswith("/match") and not text.startswith("merged/"):
+                found[text[: -len("/match")]] = verdict
+                break
+    return found
+
+
+@scorer(metrics=_merged_metrics())
 def geobenchx_merged():
-    """Mean of the match judges already stored on this sample.
+    """Mean of the judges' indicators on this sample.
 
     Reads ``state.scores`` written by the judge scorers that ran first. Does
     not call a model. ``length_diff`` is omitted: it does not depend on the
-    judge and stays on each judge's row.
+    judge and stays on each judge's row. This is not the Section 5.2 panel
+    share; ``geobenchx_panel`` is.
     """
 
     async def score(state: TaskState, target: Target) -> Score:
         del target
         judges = _judge_scores(state)
         values = merged_match(judges)
-        answered = [
-            value
-            for judge in judges
-            for key, value in judge.items()
-            if str(key).endswith("/match") and isinstance(value, int | float) and not math.isnan(float(value))
-        ]
+        answered = judge_verdicts(state)
         return Score(
             value=values,
             explanation=(
-                "arithmetic mean of the match judges on this sample; not a vote and "
-                "not a GeoBenchX metric (Krechetova & Kochedykov, Section 5, record one evaluator)"
+                "mean of the judges' 0/1 indicators on this sample; not a vote and "
+                "not the Section 5.2 panel share, which averages each judge's frequency"
             ),
             metadata={"protocol": "our_addition", "n_judges": len(judges), "n_match": len(answered)},
+        )
+
+    return score
+
+
+@scorer(metrics=_panel_metrics())
+def geobenchx_panel():
+    """Unweighted mean of each judge's no-match, partial, and match shares.
+
+    Krechetova & Kochedykov, Section 5.2. The per-sample value is a placeholder.
+    ``panel_rate`` reads the raw verdicts from metadata and ignores it.
+    """
+
+    async def score(state: TaskState, target: Target) -> Score:
+        del target
+        verdicts = judge_verdicts(state)
+        return Score(
+            value={category: 0.0 for category in SHARE_CATEGORIES},
+            explanation=(
+                "panel share is the unweighted mean of each judge's frequency "
+                "(Krechetova & Kochedykov, Section 5.2), not the mean of these placeholders"
+            ),
+            metadata={"protocol": "geobenchx_panel", "verdicts": verdicts, "n_judges": len(verdicts)},
         )
 
     return score

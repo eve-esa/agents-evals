@@ -10,11 +10,14 @@ The table shape follows the logger this project used to share a workspace
 with: ``lm_eval/loggers/wandb_logger.py`` (``_log_results_as_table``,
 ``log_eval_result``) in eve-esa/lm-evaluation-harness. Chart keys are the
 benchmark name from task metadata plus the score name already stored on the
-log (``tao``, ``tio``, ``tem``, ``param_acc``, ``merged/match``,
-``*/length_diff``). Each judge's match mean is ``{benchmark}/llm_as_judge/{model}``.
-``{benchmark}/llm_as_judge/avg`` is the unweighted mean of those means, and
-``n_judges`` is how many went into it. Per judge the summary also carries
-``n`` and the absolute counts of match 2, 1, and 0. When the task lists
+log (``tao``, ``tio``, ``tem``, ``param_acc``, ``*/length_diff``).
+GeoBenchX reports the share of each verdict (Krechetova & Kochedykov,
+Section 6.1). ``{benchmark}/llm_as_judge/{model}`` is that judge's match
+share. ``{benchmark}/match`` and ``{benchmark}/llm_as_judge/avg`` are the
+unweighted mean of the judges' match shares (Section 5.2), and the same
+for partial and no-match. ``merged/match`` is a per-sample average and is
+not that panel number. Per judge the summary also carries ``n`` and the
+absolute counts of match, partial, and no-match. When the task lists
 sample-metadata fields in ``summary_groups``, that whole block is repeated
 under ``{benchmark}/{label}/`` for each class (GeoBenchX ``kind`` is
 solvable, unsolvable, and control; a label such as ``Task Set 03`` is
@@ -125,34 +128,53 @@ def _mean_of(values: list[float]) -> float | None:
 
 # Leaf labels copied onto ``{benchmark}/llm_as_judge/{model}/<stat>``.
 # ``ci`` returns ``lower``/``upper`` (Inspect ``scorer._metrics.std.ci``).
-# Verdict shares are GeoBenchX's success / partial / no-match frequencies
-# (Krechetova & Kochedykov, Section 5; ``generate_eval_stats``).
+# Verdict shares are GeoBenchX's no-match / partial / match frequencies
+# (Krechetova & Kochedykov, Section 6.1; ``generate_eval_stats``).
+# ``success`` remains the match share so older chart keys still read it.
 _JUDGE_STATS = {
     "stderr": "stderr",
     "median": "median",
     "median/median": "median",
     "success": "success",
-    "verdict_rates/success": "success",
     "partial": "partial",
-    "verdict_rates/partial": "partial",
     "no_match": "no_match",
-    "verdict_rates/no_match": "no_match",
     "lower": "ci_lower",
     "ci/lower": "ci_lower",
+    "ci_wilson/lower": "ci_lower",
     "upper": "ci_upper",
     "ci/upper": "ci_upper",
+    "ci_wilson/upper": "ci_upper",
     "ci_lower": "ci_lower",
     "ci_upper": "ci_upper",
 }
-_COUNT_FROM_RATE = (("success", "n_success"), ("partial", "n_partial"), ("no_match", "n_no_match"))
+_SHARE_CATEGORIES = ("no_match", "partial", "match")
+
+
+def judge_category(score_name: str) -> tuple[str, str] | None:
+    """``(slug, category)`` for one judge's share row.
+
+    ``merged/`` is the per-sample average, not a judge. ``panel`` is not a
+    checkpoint id. A bare ``match`` is the panel row.
+    """
+    if score_name.startswith("merged/") or "/" not in score_name:
+        return None
+    # ``no_match`` before ``match``: ``.../no_match`` also ends with ``/match``.
+    for category in _SHARE_CATEGORIES:
+        suffix = "/" + category
+        if not score_name.endswith(suffix):
+            continue
+        slug = score_name[: -len(suffix)].replace("/", "_")
+        if slug and slug != "panel":
+            return slug, category
+    return None
 
 
 def judge_slug(score_name: str) -> str | None:
     """Checkpoint id for a ``*/match`` row. ``merged/match`` is not a judge."""
-    if score_name == "merged/match" or not score_name.endswith("/match"):
+    parsed = judge_category(score_name)
+    if parsed is None or parsed[1] != "match":
         return None
-    slug = score_name[: -len("/match")].replace("/", "_")
-    return slug or None
+    return parsed[0]
 
 
 def _stat_label(metric: Any, key: Any) -> str | None:
@@ -179,25 +201,24 @@ def _judge_fields(metrics: dict[str, Any]) -> dict[str, float]:
 def summary_metrics(scores: list[Any], benchmark: str) -> dict[str, int | float]:
     """Stable summary keys, including one block per judge.
 
-    ``{benchmark}/llm_as_judge/{model}`` is that judge's mean match.
-    ``{benchmark}/llm_as_judge/avg`` is the unweighted arithmetic mean of
-    those means (each reported judge once, not a second pass over samples).
-    ``n_judges`` is the number of means in that average.
+    ``{benchmark}/llm_as_judge/{model}`` is that judge's match share
+    (``generate_eval_stats``: count of verdict 2 over the tasks that judge
+    scored). ``partial`` and ``no_match`` sit beside it. ``success`` is the
+    same match share.
 
-    ``{benchmark}/match`` stays the ``merged/match`` mean when that row
-    exists, which is the mean of the per-sample judge average. It equals
-    ``llm_as_judge/avg`` when every judge scored every sample.
+    ``{benchmark}/match`` and ``llm_as_judge/avg`` are the unweighted mean of
+    those match shares (Section 5.2: each judge once). The same mean is taken
+    for partial and no-match. ``merged/match`` is not used: it is the mean of
+    per-sample averages, which differs when a judge skipped a task.
 
-    Absolute counts: ``n`` is ``scored_samples``. ``n_success``,
-    ``n_partial``, and ``n_no_match`` are ``round(share * n)`` for match
-    values 2, 1, and 0. The scorer stores those as shares
-    (``verdict_rates``), so the count is recovered from the share and ``n``.
+    Absolute counts: ``n`` is ``scored_samples`` on the match row. The counts
+    are ``round(share * n)``.
     """
     out: dict[str, int | float] = {}
-    match_values: list[float] = []
     length_values: list[float] = []
-    merged_match: float | None = None
-    judge_means: list[float] = []
+    shares: dict[str, dict[str, float]] = {}
+    extras: dict[str, dict[str, float]] = {}
+    counts: dict[str, int] = {}
     for score in scores:
         name = str(getattr(score, "name", ""))
         metrics = getattr(score, "metrics", None) or {}
@@ -206,32 +227,64 @@ def summary_metrics(scores: list[Any], benchmark: str) -> dict[str, int | float]
             continue
         if name in _STEP_SCORES:
             out[f"{benchmark}/{name}"] = mean
-        elif name == "merged/match":
-            merged_match = mean
-        elif (slug := judge_slug(name)) is not None:
-            match_values.append(mean)
-            fields = _judge_fields(metrics)
-            prefix = f"{benchmark}/llm_as_judge/{slug}"
-            out[prefix] = fields["mean"]
-            judge_means.append(fields["mean"])
-            for label, value in fields.items():
-                if label != "mean":
-                    out[f"{prefix}/{label}"] = value
-            n = getattr(score, "scored_samples", None)
-            if isinstance(n, int):
-                out[f"{prefix}/n"] = n
-                for rate_name, count_name in _COUNT_FROM_RATE:
-                    rate = fields.get(rate_name)
-                    if rate is not None:
-                        out[f"{prefix}/{count_name}"] = int(round(rate * n))
-        elif name.endswith("/length_diff"):
+            continue
+        if name.endswith("/length_diff") and not name.startswith("merged/"):
             length_values.append(mean)
-    match = merged_match if merged_match is not None else _mean_of(match_values)
-    if match is not None:
-        out[f"{benchmark}/match"] = match
-    if judge_means:
-        out[f"{benchmark}/llm_as_judge/avg"] = sum(judge_means) / len(judge_means)
-        out[f"{benchmark}/llm_as_judge/n_judges"] = len(judge_means)
+            continue
+        parsed = judge_category(name)
+        if parsed is None:
+            continue
+        slug, category = parsed
+        shares.setdefault(slug, {})[category] = mean
+        if category != "match":
+            continue
+        fields = _judge_fields(metrics)
+        extras[slug] = {label: value for label, value in fields.items() if label != "mean"}
+        n = getattr(score, "scored_samples", None)
+        if isinstance(n, int):
+            counts[slug] = n
+    judge_match: list[float] = []
+    judge_partial: list[float] = []
+    judge_none: list[float] = []
+    for slug, categories in shares.items():
+        prefix = f"{benchmark}/llm_as_judge/{slug}"
+        match = categories.get("match")
+        if match is None:
+            continue
+        out[prefix] = match
+        out[f"{prefix}/success"] = match
+        judge_match.append(match)
+        partial = categories.get("partial")
+        none = categories.get("no_match")
+        if partial is not None:
+            out[f"{prefix}/partial"] = partial
+            judge_partial.append(partial)
+        if none is not None:
+            out[f"{prefix}/no_match"] = none
+            judge_none.append(none)
+        for label, value in extras.get(slug, {}).items():
+            if label not in ("success", "partial", "no_match"):
+                out[f"{prefix}/{label}"] = value
+        n = counts.get(slug)
+        if n is None:
+            continue
+        out[f"{prefix}/n"] = n
+        out[f"{prefix}/n_success"] = int(round(match * n))
+        if partial is not None:
+            out[f"{prefix}/n_partial"] = int(round(partial * n))
+        if none is not None:
+            out[f"{prefix}/n_no_match"] = int(round(none * n))
+    panel_match = _mean_of(judge_match)
+    if panel_match is not None:
+        out[f"{benchmark}/match"] = panel_match
+        out[f"{benchmark}/llm_as_judge/avg"] = panel_match
+        out[f"{benchmark}/llm_as_judge/n_judges"] = len(judge_match)
+    panel_partial = _mean_of(judge_partial)
+    if panel_partial is not None:
+        out[f"{benchmark}/partial"] = panel_partial
+    panel_none = _mean_of(judge_none)
+    if panel_none is not None:
+        out[f"{benchmark}/no_match"] = panel_none
     length = _mean_of(length_values)
     if length is not None:
         out[f"{benchmark}/length_diff"] = length
@@ -261,57 +314,78 @@ def _class_labels(sample: Any, field: str) -> list[str]:
     return []
 
 
-def _subset_summary(flats: list[dict[str, float]], prefix: str) -> dict[str, int | float]:
-    """The same means and counts as the full run, on this class only.
+def _ones(values: list[float]) -> int:
+    """How many indicators are 1. A 0/1 share's count of that category."""
+    return sum(value == 1 for value in values)
 
-    Counts are taken from the samples in the class. Match 2, 1, and 0 are
-    ``n_success``, ``n_partial``, and ``n_no_match``.
+
+def _subset_summary(flats: list[dict[str, float]], prefix: str) -> dict[str, int | float]:
+    """The same shares and counts as the full run, on this class only.
+
+    Each judge's share is the mean of that judge's 0/1 indicators on the
+    samples the judge scored. The class match share is the unweighted mean
+    of those shares. ``merged/match`` is not used.
     """
     out: dict[str, int | float] = {f"{prefix}/n": len(flats)}
     for step in _STEP_SCORES:
         mean = _mean_of([row[step] for row in flats if step in row])
         if mean is not None:
             out[f"{prefix}/{step}"] = mean
-    judge_keys: list[str] = []
-    seen: set[str] = set()
+    by_judge: dict[str, dict[str, list[float]]] = {}
     for row in flats:
-        for key in row:
-            if key.endswith("/match") and key != "merged/match" and key not in seen:
-                seen.add(key)
-                judge_keys.append(key)
-    judge_means: list[float] = []
-    for key in judge_keys:
-        slug = judge_slug(key)
-        values = [row[key] for row in flats if key in row]
-        if slug is None or not values:
+        for key, value in row.items():
+            parsed = judge_category(key)
+            if parsed is None:
+                continue
+            slug, category = parsed
+            by_judge.setdefault(slug, {}).setdefault(category, []).append(value)
+    match_shares: list[float] = []
+    partial_shares: list[float] = []
+    none_shares: list[float] = []
+    for slug, categories in by_judge.items():
+        match_values = categories.get("match") or []
+        if not match_values:
             continue
-        mean = sum(values) / len(values)
-        judge_means.append(mean)
+        n = len(match_values)
+        match_share = sum(match_values) / n
+        match_shares.append(match_share)
         block = f"{prefix}/llm_as_judge/{slug}"
-        n_success = sum(value == 2 for value in values)
-        n_partial = sum(value == 1 for value in values)
-        n_no_match = sum(value == 0 for value in values)
-        n = len(values)
-        out[block] = mean
+        n_success = _ones(match_values)
+        partial_values = categories.get("partial") or []
+        none_values = categories.get("no_match") or []
+        out[block] = match_share
         out[f"{block}/n"] = n
         out[f"{block}/n_success"] = n_success
-        out[f"{block}/n_partial"] = n_partial
-        out[f"{block}/n_no_match"] = n_no_match
         out[f"{block}/success"] = n_success / n
-        out[f"{block}/partial"] = n_partial / n
-        out[f"{block}/no_match"] = n_no_match / n
-        out[f"{block}/median"] = float(statistics.median(values))
-    if judge_means:
-        out[f"{prefix}/llm_as_judge/avg"] = sum(judge_means) / len(judge_means)
-        out[f"{prefix}/llm_as_judge/n_judges"] = len(judge_means)
-    merged = [row["merged/match"] for row in flats if "merged/match" in row]
-    if merged:
-        out[f"{prefix}/match"] = sum(merged) / len(merged)
-    elif judge_means:
-        out[f"{prefix}/match"] = sum(judge_means) / len(judge_means)
+        out[f"{block}/median"] = float(statistics.median(match_values))
+        if partial_values:
+            partial_share = sum(partial_values) / len(partial_values)
+            partial_shares.append(partial_share)
+            n_partial = _ones(partial_values)
+            out[f"{block}/n_partial"] = n_partial
+            out[f"{block}/partial"] = n_partial / len(partial_values)
+        if none_values:
+            none_share = sum(none_values) / len(none_values)
+            none_shares.append(none_share)
+            n_none = _ones(none_values)
+            out[f"{block}/n_no_match"] = n_none
+            out[f"{block}/no_match"] = n_none / len(none_values)
+    if match_shares:
+        panel = sum(match_shares) / len(match_shares)
+        out[f"{prefix}/match"] = panel
+        out[f"{prefix}/llm_as_judge/avg"] = panel
+        out[f"{prefix}/llm_as_judge/n_judges"] = len(match_shares)
+    if partial_shares:
+        out[f"{prefix}/partial"] = sum(partial_shares) / len(partial_shares)
+    if none_shares:
+        out[f"{prefix}/no_match"] = sum(none_shares) / len(none_shares)
     lengths: list[float] = []
     for row in flats:
-        diffs = [value for key, value in row.items() if key.endswith("/length_diff")]
+        diffs = [
+            value
+            for key, value in row.items()
+            if key.endswith("/length_diff") and not key.startswith("merged/")
+        ]
         if diffs:
             lengths.append(sum(diffs) / len(diffs))
     if lengths:
@@ -340,7 +414,43 @@ def grouped_metrics(samples: list[Any] | None, benchmark: str, fields: list[str]
     out: dict[str, int | float] = {}
     for label, flats in buckets.items():
         out.update(_subset_summary(flats, f"{benchmark}/{label}"))
+    if "kind" in fields:
+        # The paper's solvable column is solvable plus the three control tasks.
+        combined = [
+            _score_map(getattr(sample, "scores", None))
+            for sample in samples or []
+            if {"solvable", "control"} & set(_class_labels(sample, "kind"))
+        ]
+        if combined:
+            out.update(_subset_summary(combined, f"{benchmark}/solvable_incl_control"))
     return out
+
+
+def geobenchx_share_summary(samples: list[Any] | None) -> dict[str, int | float]:
+    """Match, partial, and no-match shares for one GeoBenchX run.
+
+    Built from per-sample 0/1 indicators. The panel value is the unweighted
+    mean of each judge's share (Section 5.2), including inside each task
+    group and ``solvable_incl_control``. Step scores, ``length_diff``, and
+    the median of the indicators are omitted so writing this dict onto an
+    existing run leaves those numbers in place.
+    """
+    rows = list(samples or [])
+    flats = [_score_map(getattr(sample, "scores", None)) for sample in rows]
+    summary: dict[str, int | float] = _subset_summary(flats, "geobenchx")
+    summary.update(grouped_metrics(rows, "geobenchx", ["kind", "labels"]))
+    summary.update(dashboard_aliases(summary, "geobenchx"))
+    kept: dict[str, int | float] = {}
+    for key, value in summary.items():
+        if key.endswith("/median"):
+            continue
+        if (
+            "solvable_incl_control" in key
+            or "llm_as_judge" in key
+            or key.endswith(("/match", "/partial", "/no_match"))
+        ):
+            kept[key] = value
+    return kept
 
 
 def dashboard_aliases(summary: dict[str, int | float], benchmark: str) -> dict[str, int | float]:
@@ -692,23 +802,30 @@ def _checkpoint_id(model_id: str) -> str:
 def _judge_verdicts(score: Any) -> list[tuple[str, float | None, str]]:
     """One entry per judge on this score: checkpoint id, numeric verdict, written output.
 
-    A ``{model}/match`` field is GeoBenchX's 0/1/2 verdict. Otherwise a score
-    with ``judge_model`` is a trajectory judge (``trajectory_accuracy``) or
-    EO-Gym's answer judge (``correct``). ``merged/match`` is the panel mean
-    and stays on the ``match`` column.
+    GeoBenchX stores the raw 0/1/2 on score metadata (``verdict``) and a 0/1
+    indicator under ``{model}/match``. The table column is the raw verdict.
+    Otherwise a score with ``judge_model`` is a trajectory judge
+    (``trajectory_accuracy``) or EO-Gym's answer judge (``correct``).
+    ``merged/`` is the per-sample average and is not a judge column.
     """
     value = getattr(score, "value", None)
     if not isinstance(value, dict):
         return []
     explanation = getattr(score, "explanation", None)
     text = explanation if isinstance(explanation, str) else ""
+    metadata = getattr(score, "metadata", None) or {}
+    raw = metadata.get("verdict")
     named: list[tuple[str, float | None, str]] = []
     for key, item in value.items():
         label = str(key)
         if label.startswith("merged/") or not label.endswith("/match"):
             continue
         slug = label[: -len("/match")]
-        if slug:
+        if not slug:
+            continue
+        if isinstance(raw, int) and not isinstance(raw, bool):
+            named.append((slug, float(raw), text))
+        else:
             named.append((slug, _finite(item), text))
     if named:
         return named
