@@ -1,7 +1,8 @@
 """EO-Gym (arXiv:2605.01250) as an Inspect task.
 
-Requires EO-Gym's tool server running with its data (``scripts/start_tool_server.sh``
-in ``third_party/EO-Gym``) and a vision-capable model under test::
+Requires the copied EO-Gym tool server running with its imagery
+(``data/venvs/eo-gym/bin/python -m eo_gym.server`` from ``tasks/eo_gym/server``)
+and a vision-capable model under test::
 
     uv run inspect eval agentic_evals/eo_gym --model openai-api/<name>/<vlm> \\
         -M strict_tools=false --model-role grader=openai/gpt-4.1-mini

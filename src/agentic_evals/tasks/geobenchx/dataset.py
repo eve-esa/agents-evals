@@ -30,7 +30,7 @@ from typing import Any, Literal
 from inspect_ai.dataset import MemoryDataset, Sample
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser
 
-ASSETS = Path(__file__).resolve().parent / "assets"
+TASK_DATA = Path(__file__).resolve().parent / "data"
 
 Group = Literal["all", "merge", "process", "spatial", "heatmaps"]
 Kind = Literal["all", "solvable", "unsolvable", "control"]
@@ -92,7 +92,7 @@ def _step(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 @cache
-def load_records(root: Path = ASSETS) -> list[dict[str, Any]]:
+def load_records(root: Path = TASK_DATA) -> list[dict[str, Any]]:
     path = root / "tasks_and_reference_solutions.json"
     if not path.exists():
         raise FileNotFoundError(f"{path} is part of this package and should be here.")
@@ -105,7 +105,7 @@ def load_samples(
     task_id: str | None = None,
     *,
     on: date | None = None,
-    root: Path = ASSETS,
+    root: Path = TASK_DATA,
 ) -> list[Sample]:
     prompt_date = on or date.today()
     prompt = system_prompt(prompt_date)

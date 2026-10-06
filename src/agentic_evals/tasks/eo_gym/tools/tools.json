@@ -1,0 +1,921 @@
+{
+ "all_tools": [
+  "analyze_optical_scene",
+  "basic_calculator",
+  "compute_ndbi_by_multispectral",
+  "compute_ndsi_by_multispectral",
+  "compute_ndvi_by_multispectral",
+  "compute_ndwi_by_multispectral",
+  "compute_urban_mask_by_multispectral",
+  "compute_vegetation_mask_by_multispectral",
+  "compute_water_mask_by_multispectral",
+  "crop_multispectral_image",
+  "crop_optical_or_sar_image",
+  "describe_optical_object",
+  "get_bbox_geospatial_relationship",
+  "get_building_mask_by_optical_image",
+  "get_mask_geospatial_relationship",
+  "get_multispectral_list",
+  "get_next_multispectral",
+  "get_next_optical_image",
+  "get_object_bbox_by_optical_image",
+  "get_object_bbox_by_optical_sar_image",
+  "get_object_bbox_by_sar_image",
+  "get_object_mask_by_optical_image",
+  "get_optical_from_sar",
+  "get_optical_image_list",
+  "get_previous_multispectral",
+  "get_previous_optical_image",
+  "get_road_mask_by_optical_image",
+  "get_sar_from_optical",
+  "move_down_optical_image",
+  "move_left_optical_image",
+  "move_right_optical_image",
+  "move_up_optical_image",
+  "normalize_bounding_boxes",
+  "theme_index_lookup",
+  "zoom_out_optical_image"
+ ],
+ "skill_tools": {
+  "fair1m_ms": [
+   "get_multispectral_list",
+   "get_previous_multispectral",
+   "get_next_multispectral",
+   "crop_multispectral_image",
+   "compute_ndvi_by_multispectral",
+   "compute_ndwi_by_multispectral",
+   "compute_ndbi_by_multispectral",
+   "compute_ndsi_by_multispectral",
+   "compute_water_mask_by_multispectral",
+   "compute_vegetation_mask_by_multispectral",
+   "compute_urban_mask_by_multispectral",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship",
+   "theme_index_lookup"
+  ],
+  "fmow": [
+   "get_optical_image_list",
+   "get_previous_optical_image",
+   "get_next_optical_image",
+   "crop_optical_or_sar_image",
+   "get_object_bbox_by_optical_image",
+   "get_object_mask_by_optical_image",
+   "get_road_mask_by_optical_image",
+   "get_building_mask_by_optical_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship",
+   "normalize_bounding_boxes"
+  ],
+  "m4-sar": [
+   "get_object_bbox_by_optical_sar_image",
+   "get_sar_from_optical",
+   "get_optical_from_sar",
+   "crop_optical_or_sar_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship"
+  ],
+  "fair1_vhr": [
+   "crop_optical_or_sar_image",
+   "zoom_out_optical_image",
+   "move_up_optical_image",
+   "move_down_optical_image",
+   "move_left_optical_image",
+   "move_right_optical_image",
+   "basic_calculator",
+   "get_object_bbox_by_optical_image",
+   "get_bbox_geospatial_relationship",
+   "get_mask_geospatial_relationship",
+   "get_object_mask_by_optical_image"
+  ],
+  "sardet_100k": [
+   "crop_optical_or_sar_image",
+   "get_object_bbox_by_sar_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship"
+  ],
+  "dior": [
+   "crop_optical_or_sar_image",
+   "get_object_bbox_by_optical_image",
+   "get_object_mask_by_optical_image",
+   "get_road_mask_by_optical_image",
+   "get_building_mask_by_optical_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship",
+   "analyze_optical_scene",
+   "describe_optical_object"
+  ],
+  "dota": [
+   "crop_optical_or_sar_image",
+   "get_object_bbox_by_optical_image",
+   "get_object_mask_by_optical_image",
+   "get_road_mask_by_optical_image",
+   "get_building_mask_by_optical_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship",
+   "analyze_optical_scene",
+   "describe_optical_object"
+  ],
+  "xview": [
+   "crop_optical_or_sar_image",
+   "get_object_bbox_by_optical_image",
+   "get_object_mask_by_optical_image",
+   "get_road_mask_by_optical_image",
+   "get_building_mask_by_optical_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship",
+   "analyze_optical_scene",
+   "describe_optical_object"
+  ],
+  "xbd": [
+   "crop_optical_or_sar_image",
+   "get_object_bbox_by_optical_image",
+   "get_object_mask_by_optical_image",
+   "get_building_mask_by_optical_image",
+   "get_bbox_geospatial_relationship",
+   "basic_calculator",
+   "get_mask_geospatial_relationship",
+   "analyze_optical_scene",
+   "describe_optical_object"
+  ]
+ },
+ "schemas": [
+  {
+   "name": "analyze_optical_scene",
+   "description": "Classify a scene from an optical image using an LLM with vision support. Remember to mention if you pass a masking or SAR image in given prompt_text. LLM vision scene classification; returns a scene label string only (not for counting/detection).\n\nInputs: optical_image_path (str), prompt_text (str).\nOutput: classification result (str).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "prompt_text": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path",
+     "prompt_text"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "basic_calculator",
+   "description": "Evaluate a simple arithmetic expression safely.\nEvaluates a simple arithmetic expression; no vision or spatial reasoning.\nInput: expression (str) supporting +, -, *, /, //, **, ^ (as power), parentheses, numbers,\n       and math funcs: abs, round, min, max, sum, sqrt, sin, cos, tan, atan, atan2, log, exp. Division by zero is not allowed. For round, ndigits is coerced to int.\n       Constants: pi, e.\nOutput: dict with result (float).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "expression": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "expression"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_ndbi_by_multispectral",
+   "description": "Shortcut to compute NDBI stats from a multispectral NetCDF crop or band folder.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_ndsi_by_multispectral",
+   "description": "Shortcut to compute NDSI (snow) stats from a multispectral NetCDF crop or band folder.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_ndvi_by_multispectral",
+   "description": "Shortcut to compute NDVI stats from a multispectral NetCDF crop or band folder.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_ndwi_by_multispectral",
+   "description": "Shortcut to compute NDWI stats from a multispectral NetCDF crop or band folder.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_urban_mask_by_multispectral",
+   "description": "Compute an urban mask from a multispectral crop NetCDF using NDBI and sensor thresholds.\nDerives an urban mask from NDBI thresholds; returns mask metadata/arrays.\nInputs: multispectral_image_path (str/Path), sensor (ls|s2).\nOutput: mask_path (str) to PNG ",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path",
+     "sensor"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_vegetation_mask_by_multispectral",
+   "description": "Compute a vegetation mask from a multispectral crop NetCDF using NDVI and sensor thresholds.\nDerives a vegetation mask from NDVI thresholds; returns mask metadata/arrays.\nInputs: multispectral_image_path (str/Path), sensor (ls|s2).\nOutput: mask_path (str) to PNG ",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path",
+     "sensor"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compute_water_mask_by_multispectral",
+   "description": "Compute a water mask from a multispectral crop NetCDF using NDWI and sensor thresholds.\nDerives a water mask from NDWI thresholds; returns mask metadata/arrays.\nInputs: multispectral_image_path (str/Path), sensor (ls|s2).\nOutput: mask_path (str) to PNG ",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "multispectral_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "multispectral_image_path",
+     "sensor"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "crop_multispectral_image",
+   "description": "Load all available FAIR1M multispectral bands, crop to AOI, and save NetCDF outputs.\nInputs: ms_folders (List[str/Path]) and aoi (List[float] normalized [x0,y0,x1,y1]).\nOutput: List[dict] of mapping from ms_folder to saved NetCDF paths.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "ms_folders": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     },
+     "aoi": {
+      "type": "number",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "ms_folders",
+     "aoi"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "crop_optical_or_sar_image",
+   "description": "Crop an optical or SAR image by a normalized AOI and return the saved path.\nDownloads and crops an optical or SAR image to the AOI; returns local crop path.\nInputs: image_url (str), aoi (List[float] normalized 0-1 [x0, y0, x1, y1]).\nOutput: cropped_path (str) pointing to the saved PNG on disk.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "image_url": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "aoi": {
+      "type": "number",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "image_url",
+     "aoi"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "describe_optical_object",
+   "description": "Describe object attributes (e.g., color) from an optical image via an LLM.\nLLM vision description of a named object’s attributes; not for detection or counting.\nInputs: optical_image_path (str), object_name (str).\nOutput: dict with `description` (str), or `error`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "object_name": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path",
+     "object_name"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_bbox_geospatial_relationship",
+   "description": "Compute a coarse relative geospatial relationship between two locations.\nComputes relative geospatial relation (e.g., north/south/east/west) between boxes/points.\nInputs: loc_a (List[float]) and loc_b (List[float]) as [x, y] or [x0,y0,x1,y1] (centroid used).\nOutput: dict with direction (str) and dx, dy (float).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "loc_a": {
+      "type": "number",
+      "description": "Required parameter."
+     },
+     "loc_b": {
+      "type": "number",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "loc_a",
+     "loc_b"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_building_mask_by_optical_image",
+   "description": "Run object detection model to extract building masks for the provided image URLs.\nBuilding extraction shortcut; returns binary building masks per URL.\nInputs: optical_image_urls (List[str]).\nOutput: Dict[str, List[dict]] with mask_url metadata per image URL.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_urls": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_urls"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_mask_geospatial_relationship",
+   "description": "Compute basic geospatial relationships between two binary masks.\nComputes overlap/IoU and coverage stats between two binary masks.\nInputs: mask_a, mask_b as binary mask URLs/paths (PNG read if URL/path).\nOutput: dict with intersection, union, iou, and coverage stats.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "mask_a": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "mask_b": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "mask_a",
+     "mask_b"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_multispectral_list",
+   "description": "Get several multispectral dataset locations (e.g., Sentinel-2/Landsat) for a given multispectral dataset location.\nLists multispectral dataset folders covering the scene identified by a reference ms_folder.\nInputs: ms_folder (str/Path), sensor (str: s2 or ls), start_date/end_date (required str/ISO date).\nOutput: List[dict] of multispectral entries with ms_folder and capture_time.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "ms_folder": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "start_date": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "end_date": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "ms_folder",
+     "sensor",
+     "start_date",
+     "end_date"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_next_multispectral",
+   "description": "Return the next multispectral folder after a reference date.\nInputs: ms_folder (str/Path), sensor (str: s2 or ls), reference_date (str/ISO date).\nOutput: Optional[dict] entry with ms_folder and capture_time from the cached index.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "ms_folder": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "reference_date": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "ms_folder",
+     "sensor",
+     "reference_date"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_next_optical_image",
+   "description": "Return the closest later RGB image URL to the given image.\nInputs: optical_image_path (str/Path), reference_date (YYYY-MM-DD).\nOutput: Optional entry with image URL, capture time, and size/GSD metadata.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "reference_date": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path",
+     "reference_date"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_object_bbox_by_optical_image",
+   "description": "Detect objects from optical images using text prompts and return bounding boxes. Text-prompt detection; returns per-URL metadata plus bounding boxes.\nInputs: optical_image_urls (List[str]), text_prompt (str).\nOutput:\n  - If one URL: {\"image\": {image_url, image_size, gsd}, \"detections\": List[dict]{bbox, score, label}}.\n  - If multiple URLs: List of {\"image\": {...}, \"detections\": [...]} entries in input order.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_urls": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     },
+     "text_prompt": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_urls",
+     "text_prompt"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_object_bbox_by_optical_sar_image",
+   "description": "Object bbox selection using an optical+SAR pair and a text prompt.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sar_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "text_prompt": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path",
+     "sar_image_path",
+     "text_prompt"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_object_bbox_by_sar_image",
+   "description": "SAR text-prompt bbox tool using cached ground truth + optional LLM label filtering.\n\nInputs: sar_image_urls (List[str]), text_prompt (str).\nOutput: Dict[str, List[dict]].",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "sar_image_urls": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     },
+     "text_prompt": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "sar_image_urls",
+     "text_prompt"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_object_mask_by_optical_image",
+   "description": "Segment optical images using a text prompt and return binary mask URLs.\nText-prompt segmentation; returns per-URL list of mask metadata pointing to saved PNGs.\nInputs: optical_image_urls (List[str]), text_prompt (str).\nOutput: Dict[str, dict] mapping optical_image_url -> {\n    \"image\": {image_url, image_size, gsd},\n    \"masks\": List[dict]{label, mask_url, bbox, size, score, method},\n}.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_urls": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     },
+     "text_prompt": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_urls",
+     "text_prompt"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_optical_from_sar",
+   "description": "Return the optical companion for a SAR input.\nReturns paired optical URL/path for the given SAR image; no detection or analysis.\nInputs: sar_image_path (str/Path).\nOutput: Optional[str] relative optical image path.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "sar_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "sar_image_path"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_optical_image_list",
+   "description": "List RGB images co-located with the provided frame, ordered by timestamp or frame index. Only return lists optical images without analyze content.\nInputs: optical_image_path (str/Path), start_date/end_date (required YYYY-MM-DD).\nOutput: List of entries containing each image URL, capture time, and optional size/GSD metadata.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "start_date": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "end_date": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path",
+     "start_date",
+     "end_date"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_previous_multispectral",
+   "description": "Return the most recent multispectral folder before a reference date.\nInputs: ms_folder (str/Path), sensor (str: s2 or ls), reference_date (str/ISO date).\nOutput: Optional[dict] entry with ms_folder and capture_time from the cached index.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "ms_folder": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "reference_date": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "ms_folder",
+     "sensor",
+     "reference_date"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_previous_optical_image",
+   "description": "Return the closest earlier RGB image URL to the given image.\nInputs: optical_image_path (str/Path), reference_date (YYYY-MM-DD).\nOutput: Optional entry with image URL, capture time, and size/GSD metadata.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "reference_date": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path",
+     "reference_date"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_road_mask_by_optical_image",
+   "description": "Run object detection model to extract road masks for the provided image URLs.\nRoad extraction shortcut; returns binary road masks per URL.\nInputs: optical_image_urls (List[str]).\nOutput: Dict[str, List[dict]] with mask_url metadata per image URL.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_urls": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_urls"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_sar_from_optical",
+   "description": "Return the SAR companion for an optical input.\nReturns paired SAR URL/path for the given optical image; no detection or analysis.\nInputs: optical_image_path (str/Path).\nOutput: Optional[str] relative SAR image path.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_path": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_path"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "move_down_optical_image",
+   "description": "Shift the crop downward by `move_pixel` while preserving width/height.\nInput: optical_image_url (str) and move_pixel (int).\nReturns a dict with `new_image_url`, `image_width`, `image_height`, `gsd`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_url": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "move_pixel": {
+      "type": "integer",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_url",
+     "move_pixel"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "move_left_optical_image",
+   "description": "Shift the crop leftward by `move_pixel` while preserving width/height.\nInput: optical_image_url (str) and move_pixel (int). \nReturns a dict with `new_image_url`, `image_width`, `image_height`, `gsd`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_url": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "move_pixel": {
+      "type": "integer",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_url",
+     "move_pixel"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "move_right_optical_image",
+   "description": "Shift the crop rightward by `move_pixel` while preserving width/height.\nInput: optical_image_url (str) and move_pixel (int). \nReturns a dict with `new_image_url`, `image_width`, `image_height`, `gsd`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_url": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "move_pixel": {
+      "type": "integer",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_url",
+     "move_pixel"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "move_up_optical_image",
+   "description": "Shift the crop upward by `move_pixel` within the base image while keeping width/height constant.\nInput: optical_image_url (str) and move_pixel (int).\nReturns a dict with `new_image_url`, `image_width`, `image_height`, `gsd`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_url": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "move_pixel": {
+      "type": "integer",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_url",
+     "move_pixel"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "normalize_bounding_boxes",
+   "description": "Normalize bounding boxes using a shared reference size (largest image in the batch).\n\nAccepts a list of records, each containing bbox coordinates plus image\ndimensions (`image_width` and `image_height`) along with `image_url` for\nreference. Computes the maximum width/height across the batch and scales\nall bboxes to that common size (i.e., values / max_width or max_height).\nReturns the records augmented with `normalized_bbox`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "records": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "records"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "theme_index_lookup",
+   "description": "Return recommended index expression and bands for a theme (vegetation/water/urban) and sensor (ls/s2).\nReturns recommended spectral index formula/bands for a theme; does not process imagery.\nInputs: theme (str), sensor (str: ls or s2).\nOutput: dict with theme, sensor, index, description, expression, bands (List[str]).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "theme": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "theme",
+     "sensor"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "zoom_out_optical_image",
+   "description": "Expand the visible area from a cropped VHR image by padding `zoom_out_pixel` around the current crop.\nInput: optical_image_url (str) pointing to an existing crop URL and zoom_out_pixel (int) giving padding in base pixels.\nReturns a dict with `new_image_url`, `image_width`, `image_height`, `gsd`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "optical_image_url": {
+      "type": "string",
+      "description": "Required parameter."
+     },
+     "zoom_out_pixel": {
+      "type": "integer",
+      "description": "Required parameter."
+     }
+    },
+    "required": [
+     "optical_image_url",
+     "zoom_out_pixel"
+    ],
+    "additionalProperties": false
+   }
+  }
+ ]
+}

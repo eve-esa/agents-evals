@@ -1,8 +1,8 @@
 """MCP stdio server in front of EO-Gym's FastAPI tool server (``POST /execute``).
 
 EO-Gym exposes its tools over HTTP, not MCP. This proxy serves a chosen subset of
-them over MCP with the schemas EO-Gym's own driver builds (exported to JSON by
-``scripts/export_eo_gym_tools.py``) and forwards each call to ``/execute``,
+them over MCP with the schemas EO-Gym's own driver builds (committed in
+``tools/tools.json``) and forwards each call to ``/execute``,
 returning the observation text exactly as the driver's ``ToolAPIExecutor.execute``
 would (including its ``Error: ...`` strings, which the released scorer counts as
 illegal calls).

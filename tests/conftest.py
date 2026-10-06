@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agentic_evals.tasks.earth_bench.dataset import ASSETS
+from agentic_evals.tasks.earth_bench.dataset import TASK_DATA
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 PUBLISHED_RUNS = FIXTURES / "earth_bench" / "published_runs"
@@ -26,7 +26,7 @@ def read_json(path: Path):
 @pytest.fixture(scope="session")
 def earth_agent_root() -> Path:
     """Earth-Bench task files. The name is kept for the tests that grew up around the checkout."""
-    return ASSETS
+    return TASK_DATA
 
 
 @pytest.fixture(scope="session")
