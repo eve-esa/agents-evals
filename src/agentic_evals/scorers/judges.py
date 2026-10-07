@@ -86,7 +86,20 @@ def trajectory_judge(model: str | None = None):
             _as_openai_messages(reference, None),
         )
         prompt = TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE.format(outputs=outputs, reference_outputs=reference_outputs)
-        result = await judge.generate([ChatMessageUser(content=prompt + OUTPUT_INSTRUCTION)], config=GenerateConfig(temperature=0))
+        # A short JSON verdict. Leaving max_tokens unset inherits an uncapped
+        # eval (`--max-tokens -1`), and the endpoint then reserves the rest of
+        # the context as output, which overflows on a long trajectory.
+        try:
+            result = await judge.generate(
+                [ChatMessageUser(content=prompt + OUTPUT_INSTRUCTION)],
+                config=GenerateConfig(temperature=0, max_tokens=2048),
+            )
+        except Exception as exc:
+            return Score(
+                value={"trajectory_accuracy": math.nan},
+                explanation=f"{type(exc).__name__}: {exc}"[:2000],
+                metadata={"judge_model": str(judge), "judge_prompt": "agentevals TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE"},
+            )
         try:
             data = json.loads(result.completion.strip().removeprefix("```json").removesuffix("```").strip())
             verdict, reasoning = float(bool(data["score"])), str(data.get("reasoning", ""))
