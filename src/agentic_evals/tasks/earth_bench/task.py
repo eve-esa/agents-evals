@@ -29,9 +29,21 @@ from agentic_evals.agents.langgraph_react import langgraph_react
 from agentic_evals.paths import REPO_ROOT
 from agentic_evals.run_identity import record_run_identity
 from agentic_evals.scorers.judges import extra_judges
-from agentic_evals.tasks.earth_bench.dataset import AnswerKey, Modality, Regime, earth_bench_dataset
-from agentic_evals.tasks.earth_bench.scorers import NOT_APPLICABLE_KEY, earth_bench_scorer
-from agentic_evals.tasks.earth_bench.tools import ported_code_sha256, rgb_unavailable_reason, sample_servers
+from agentic_evals.tasks.earth_bench.dataset import (
+    AnswerKey,
+    Modality,
+    Regime,
+    earth_bench_dataset,
+)
+from agentic_evals.tasks.earth_bench.scorers import (
+    NOT_APPLICABLE_KEY,
+    earth_bench_scorer,
+)
+from agentic_evals.tasks.earth_bench.tools import (
+    ported_code_sha256,
+    rgb_unavailable_reason,
+    sample_servers,
+)
 from agentic_evals.tooling import publish_mcp_servers
 
 
@@ -84,14 +96,31 @@ def earth_bench(
     """
     return Task(
         dataset=earth_bench_dataset(regime, modality, answer_key),
-        setup=[record_run_identity(), skip_unavailable_rgb(), publish_mcp_servers(sample_servers)],
+        setup=[
+            record_run_identity(),
+            skip_unavailable_rgb(),
+            publish_mcp_servers(sample_servers),
+        ],
         solver=solver or langgraph_react(),
-        scorer=[earth_bench_scorer(upstream_compat=upstream_compat), *extra_judges(trajectory_judges)],
+        scorer=[
+            earth_bench_scorer(upstream_compat=upstream_compat),
+            *extra_judges(trajectory_judges),
+        ],
         # Upstream runners use temperature 0.1; --temperature overrides.
         config=GenerateConfig(temperature=0.1),
         metadata={
             "benchmark": "earth_bench",
             "summary_groups": ["modality"],
+            # Appendix B.2. accuracy_other_key, tool_errors, perception_failures,
+            # and the trajectory judges stay on the sample and out of the chart.
+            "published_metrics": [
+                "accuracy",
+                "efficiency",
+                "tao",
+                "tio",
+                "tem",
+                "param_acc",
+            ],
             "regime": regime,
             "modality": modality,
             "answer_key": answer_key,

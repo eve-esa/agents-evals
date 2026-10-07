@@ -21,10 +21,22 @@ absolute counts of match, partial, and no-match. When the task lists
 sample-metadata fields in ``summary_groups``, that whole block is repeated
 under ``{benchmark}/{label}/`` for each class (GeoBenchX ``kind`` is
 solvable, unsolvable, and control; a label such as ``Task Set 03`` is
-``Task_Set_03``). The slash matches the section the Forge summary already
+``Task_Set_03``). Earth-Bench's regime is a section of its own,
+``earth_bench/AP`` or ``earth_bench/IF`` (Feng et al., Section 4), and a
+modality split is nested under it (``earth_bench/AP/spectrum/accuracy``).
+A task's ``published_metrics`` is the only score names copied into that
+summary. The slash matches the section the Forge summary already
 uses for a task; the judge names follow run ``ta8fu0bx``
 (``open_ended/llm_as_judge_<model>`` and ``llm_as_judge_avg``).
 A run that does not have those scores simply omits the keys.
+
+Other score names are written as they are stored. A metric whose per-sample
+values are the same on every scorer is one key, ``{benchmark}/{metric}``.
+A metric that differs across scorers is one key per judge,
+``{benchmark}/{judge}/{metric}``, using the last segment of ``judge_model``.
+OpenEarthAgent's ``answer`` field is the table column: ``summ`` in step mode
+(Table 3) and ``ans`` end to end (Table 4). NaNs are left out of the mean.
+The same split is repeated under each ``summary_groups`` label.
 
 The same block, including each class and each judge's counts, is logged once.
 Logging it again appends a history step, which is why a republished run draws
@@ -33,7 +45,9 @@ are copies of those means so the agents workspace can chart them next to
 ``open_ended``. The run name is the model checkpoint plus the benchmark
 (``qwen3.8-27b_geobenchx``). The ``traces`` table is one row per sample,
 logged in that same call: the sample fields, the question, the target, the
-raw tool trace, and the conversation with a marker at each turn. A second
+raw tool trace, and the conversation with a marker at each turn. Its metric
+columns are the scores that benchmark recorded. A run that did not score
+``tao`` does not get a ``tao`` column. A second
 ``run.log`` is not used for it, because that appends a history step.
 
 https://github.com/eve-esa/lm-evaluation-harness/blob/main/lm_eval/loggers/wandb_logger.py
@@ -45,6 +59,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import statistics
 from typing import Any
 
@@ -97,6 +112,51 @@ def benchmark_name(metadata: dict[str, Any] | None, task: str | None) -> str:
         return name.strip()
     leaf = (task or "eval").rstrip("/").split("/")[-1]
     return leaf or "eval"
+
+
+# Earth-Bench reports Auto-Planning and Instruction-Following as separate
+# columns (Feng et al., ICLR 2026, arXiv:2509.23141, Section 4 and Appendix
+# B.2). The workspace section is the paper's label, ``AP`` or ``IF``.
+_REGIME_SECTION = {"ap": "AP", "if": "IF"}
+
+
+def metric_root(benchmark: str, regime: str | None) -> str:
+    """``{benchmark}/{AP|IF}`` when the run is one of those regimes.
+
+    Other regimes stay off the path. OpenEarthAgent's ``step`` and ``e2e``
+    only choose the answer column (``summ`` or ``ans``).
+    """
+    label = _REGIME_SECTION.get((regime or "").strip().lower())
+    if not label:
+        return benchmark
+    return f"{benchmark}/{label}"
+
+
+def regime_label(regime: str | None) -> str | None:
+    """Paper label for a regime, or the stored string when it has no label."""
+    text = (regime or "").strip()
+    if not text:
+        return None
+    return _REGIME_SECTION.get(text.lower(), text)
+
+
+def published_names(metadata: dict[str, Any] | None) -> frozenset[str] | None:
+    """Score names the task declared as its own chart metrics.
+
+    Absent means every stored score is charted. A task lists this so an
+    extra field (another answer key, a trajectory judge) stays on the sample
+    and out of the summary.
+    """
+    raw = (metadata or {}).get("published_metrics")
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.split(",") if part.strip()]
+    if (
+        isinstance(raw, list)
+        and all(isinstance(item, str) and item.strip() for item in raw)
+        and raw
+    ):
+        return frozenset(item.strip() for item in raw)
+    return None
 
 
 def _finite(value: Any) -> float | None:
@@ -180,7 +240,11 @@ def judge_slug(score_name: str) -> str | None:
 def _stat_label(metric: Any, key: Any) -> str | None:
     name = str(getattr(metric, "name", key))
     group = getattr(metric, "group", None)
-    leaf = f"{group}/{name}" if group and str(group) not in (name, "mean", "stderr") else name
+    leaf = (
+        f"{group}/{name}"
+        if group and str(group) not in (name, "mean", "stderr")
+        else name
+    )
     return _JUDGE_STATS.get(leaf) or _JUDGE_STATS.get(name)
 
 
@@ -239,7 +303,9 @@ def summary_metrics(scores: list[Any], benchmark: str) -> dict[str, int | float]
         if category != "match":
             continue
         fields = _judge_fields(metrics)
-        extras[slug] = {label: value for label, value in fields.items() if label != "mean"}
+        extras[slug] = {
+            label: value for label, value in fields.items() if label != "mean"
+        }
         n = getattr(score, "scored_samples", None)
         if isinstance(n, int):
             counts[slug] = n
@@ -291,6 +357,182 @@ def summary_metrics(scores: list[Any], benchmark: str) -> dict[str, int | float]
     return out
 
 
+def _judge_leaf(model: str) -> str:
+    """Last path segment of a judge id. ``.../deepseek/deepseek-v3.2`` is ``deepseek-v3.2``."""
+    return model.strip().rstrip("/").split("/")[-1]
+
+
+def _regime_of(samples: list[Any] | None) -> str | None:
+    for sample in samples or []:
+        regime = (getattr(sample, "metadata", None) or {}).get("regime")
+        if isinstance(regime, str) and regime.strip():
+            return regime.strip()
+    return None
+
+
+def _published_metric(name: str, regime: str | None) -> str:
+    """Paper column for OpenEarthAgent's judge field. Other names stay as stored."""
+    if name != "answer":
+        return name
+    if regime == "step":
+        return "summ"
+    if regime == "e2e":
+        return "ans"
+    return name
+
+
+def _charted_metric(name: str) -> bool:
+    """True when ``summary_metrics`` already writes this leaf."""
+    if name in _STEP_SCORES or name in {"match", "partial", "no_match", "length_diff"}:
+        return True
+    if name.startswith("merged/") or name.endswith("/length_diff"):
+        return True
+    return judge_category(name) is not None
+
+
+def _scorer_table(
+    samples: list[Any],
+) -> tuple[list[str], dict[str, str], list[dict[str, dict[str, float]]]]:
+    """Scorer names, judge leaf per scorer, and one metric map per sample.
+
+    A NaN or a non-dict score is absent from that sample's map. Chart metrics
+    (``tao``, verdict shares, ``length_diff``) are left to ``summary_metrics``.
+    """
+    order: list[str] = []
+    judges: dict[str, str] = {}
+    rows: list[dict[str, dict[str, float]]] = []
+    for sample in samples:
+        row: dict[str, dict[str, float]] = {}
+        for scorer_name, score in (getattr(sample, "scores", None) or {}).items():
+            name = str(scorer_name)
+            if name not in order:
+                order.append(name)
+            model = (getattr(score, "metadata", None) or {}).get("judge_model")
+            if isinstance(model, str) and model.strip() and name not in judges:
+                judges[name] = _judge_leaf(model)
+            value = getattr(score, "value", None)
+            if not isinstance(value, dict):
+                continue
+            numbers: dict[str, float] = {}
+            for key, item in value.items():
+                metric = str(key)
+                if _charted_metric(metric):
+                    continue
+                number = _finite(item)
+                if number is not None:
+                    numbers[metric] = number
+            if numbers:
+                row[name] = numbers
+        rows.append(row)
+    return order, judges, rows
+
+
+def _category_f1(
+    scores: list[Any] | None, prefix: str, judges: dict[str, str]
+) -> dict[str, float]:
+    """Pooled perception / operation / logic / gis F1, once when every scorer agrees."""
+    by_leaf: dict[str, list[tuple[str, float]]] = {}
+    for score in scores or []:
+        scorer = str(getattr(score, "scorer", "") or getattr(score, "name", ""))
+        metrics = getattr(score, "metrics", None) or {}
+        for key, metric in metrics.items():
+            if getattr(metric, "group", None) != "category_f1":
+                continue
+            leaf = str(getattr(metric, "name", key))
+            number = _finite(getattr(metric, "value", metric))
+            if number is None:
+                continue
+            by_leaf.setdefault(leaf, []).append((scorer, number))
+    out: dict[str, float] = {}
+    for leaf, pairs in by_leaf.items():
+        values = [value for _, value in pairs]
+        if len(set(values)) == 1:
+            out[f"{prefix}/{leaf}"] = values[0]
+            continue
+        for scorer, value in pairs:
+            slug = judges.get(scorer) or _slug(scorer)
+            if slug:
+                out[f"{prefix}/{slug}/{leaf}"] = value
+    return out
+
+
+def _native_value_rows(
+    samples: list[Any] | None, regime: str | None = None
+) -> list[dict[str, float | None]]:
+    """Per-sample metric cells using each benchmark's own score names.
+
+    A metric that is the same on every scorer is one column. A metric that
+    differs is one column per judge. OpenEarthAgent step mode names the judge
+    field ``summ``; end to end names it ``ans``. A sample with no finite value
+    stores ``None``.
+    """
+    rows_in = list(samples or [])
+    regime = regime or _regime_of(rows_in)
+    order, judges, rows = _scorer_table(rows_in)
+    found: set[str] = set()
+    for row in rows:
+        for numbers in row.values():
+            found.update(numbers)
+    columns: dict[str, list[float | None]] = {}
+    for metric in sorted(found):
+        series = {
+            scorer: [row.get(scorer, {}).get(metric) for row in rows]
+            for scorer in order
+            if any(metric in row.get(scorer, {}) for row in rows)
+        }
+        if not series:
+            continue
+        published = _published_metric(metric, regime)
+        sequences = list(series.values())
+        if all(sequence == sequences[0] for sequence in sequences):
+            columns[published] = sequences[0]
+            continue
+        for scorer, sequence in series.items():
+            slug = judges.get(scorer) or _slug(scorer)
+            if slug:
+                columns[f"{slug}/{published}"] = sequence
+    blank = len(rows_in)
+    return [
+        {key: values[index] for key, values in columns.items()}
+        for index in range(blank)
+    ]
+
+
+def native_metrics(
+    samples: list[Any] | None,
+    benchmark: str,
+    *,
+    regime: str | None = None,
+    scores: list[Any] | None = None,
+    only: frozenset[str] | None = None,
+) -> dict[str, float]:
+    """Benchmark score names that the chart allowlist does not already copy.
+
+    One key when every scorer reports the same per-sample values. One key per
+    judge when they do not. OpenEarthAgent step mode publishes ``answer`` as
+    ``summ``; end to end publishes it as ``ans``.
+    """
+    rows_in = list(samples or [])
+    regime = regime or _regime_of(rows_in)
+    _order, judges, _rows = _scorer_table(rows_in)
+    gathered: dict[str, list[float]] = {}
+    for cells in _native_value_rows(rows_in, regime):
+        for key, value in cells.items():
+            if value is not None:
+                gathered.setdefault(key, []).append(value)
+    out: dict[str, float] = {}
+    for key, values in gathered.items():
+        if only is not None and key.rsplit("/", 1)[-1] not in only:
+            continue
+        mean = _mean_of(values)
+        if mean is not None:
+            out[f"{benchmark}/{key}"] = mean
+    for key, value in _category_f1(scores, benchmark, judges).items():
+        if only is None or key.rsplit("/", 1)[-1] in only:
+            out[key] = value
+    return out
+
+
 def _slug(value: str) -> str:
     """One path segment. Spaces and punctuation become a single underscore."""
     chars: list[str] = []
@@ -310,7 +552,11 @@ def _class_labels(sample: Any, field: str) -> list[str]:
     if isinstance(raw, str) and raw.strip():
         return [raw.strip()]
     if isinstance(raw, list):
-        return [str(item).strip() for item in raw if isinstance(item, str) and str(item).strip()]
+        return [
+            str(item).strip()
+            for item in raw
+            if isinstance(item, str) and str(item).strip()
+        ]
     return []
 
 
@@ -319,7 +565,9 @@ def _ones(values: list[float]) -> int:
     return sum(value == 1 for value in values)
 
 
-def _subset_summary(flats: list[dict[str, float]], prefix: str) -> dict[str, int | float]:
+def _subset_summary(
+    flats: list[dict[str, float]], prefix: str
+) -> dict[str, int | float]:
     """The same shares and counts as the full run, on this class only.
 
     Each judge's share is the mean of that judge's 0/1 indicators on the
@@ -393,36 +641,51 @@ def _subset_summary(flats: list[dict[str, float]], prefix: str) -> dict[str, int
     return out
 
 
-def grouped_metrics(samples: list[Any] | None, benchmark: str, fields: list[str]) -> dict[str, int | float]:
+def grouped_metrics(
+    samples: list[Any] | None,
+    benchmark: str,
+    fields: list[str],
+    *,
+    regime: str | None = None,
+    only: frozenset[str] | None = None,
+) -> dict[str, int | float]:
     """Repeat the summary inside each class declared by ``summary_groups``.
 
     A string metadata field puts the sample in one class. A list field puts
     it in each entry, so a task with several labels is counted in each.
     The key is ``{benchmark}/{label}``. The field name is not part of the path.
     A sample that carries the same label from two fields is counted once.
+    Native score names are repeated on the same prefix.
     """
-    buckets: dict[str, list[dict[str, float]]] = {}
-    for sample in samples or []:
-        flat = _score_map(getattr(sample, "scores", None))
+    rows = list(samples or [])
+    regime = regime or _regime_of(rows)
+    buckets: dict[str, list[Any]] = {}
+    for sample in rows:
         seen: set[str] = set()
         for field in fields:
             for label in _class_labels(sample, field):
                 slug = _slug(label)
                 if slug and slug not in seen:
                     seen.add(slug)
-                    buckets.setdefault(slug, []).append(flat)
+                    buckets.setdefault(slug, []).append(sample)
     out: dict[str, int | float] = {}
-    for label, flats in buckets.items():
-        out.update(_subset_summary(flats, f"{benchmark}/{label}"))
+    for label, group in buckets.items():
+        prefix = f"{benchmark}/{label}"
+        flats = [_score_map(getattr(sample, "scores", None)) for sample in group]
+        out.update(_subset_summary(flats, prefix))
+        out.update(native_metrics(group, prefix, regime=regime, only=only))
     if "kind" in fields:
         # The paper's solvable column is solvable plus the three control tasks.
         combined = [
-            _score_map(getattr(sample, "scores", None))
-            for sample in samples or []
+            sample
+            for sample in rows
             if {"solvable", "control"} & set(_class_labels(sample, "kind"))
         ]
         if combined:
-            out.update(_subset_summary(combined, f"{benchmark}/solvable_incl_control"))
+            prefix = f"{benchmark}/solvable_incl_control"
+            flats = [_score_map(getattr(sample, "scores", None)) for sample in combined]
+            out.update(_subset_summary(flats, prefix))
+            out.update(native_metrics(combined, prefix, regime=regime, only=only))
     return out
 
 
@@ -453,7 +716,9 @@ def geobenchx_share_summary(samples: list[Any] | None) -> dict[str, int | float]
     return kept
 
 
-def dashboard_aliases(summary: dict[str, int | float], benchmark: str) -> dict[str, int | float]:
+def dashboard_aliases(
+    summary: dict[str, int | float], benchmark: str
+) -> dict[str, int | float]:
     """Copies of the judge means in the shape the agents workspace already charts.
 
     ``open_ended/llm_as_judge_avg`` and ``open_ended/llm_as_judge_{model}`` use
@@ -531,7 +796,9 @@ def _score_map(scores: dict[str, Any] | None) -> dict[str, float]:
 def _named(flat: dict[str, float], leaf: str) -> float | None:
     if leaf in flat:
         return flat[leaf]
-    values = [value for key, value in flat.items() if key == leaf or key.endswith("/" + leaf)]
+    values = [
+        value for key, value in flat.items() if key == leaf or key.endswith("/" + leaf)
+    ]
     return _mean_of(values)
 
 
@@ -559,7 +826,9 @@ def trace_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
             rows.append(
                 {
                     "sample_id": sample_id,
-                    "tool_step": int(entry["step"]) if isinstance(entry.get("step"), int) else 0,
+                    "tool_step": int(entry["step"])
+                    if isinstance(entry.get("step"), int)
+                    else 0,
                     "agent": _text_cell(entry.get("agent")),
                     "name": _text_cell(entry.get("name")),
                     "input": _text_cell(entry.get("input")),
@@ -636,7 +905,9 @@ def _content_blocks(message: Any) -> list[str]:
         return [text] if text else []
     blocks: list[str] = []
     for part in content:
-        kind = getattr(part, "type", None) or (part.get("type") if isinstance(part, dict) else None)
+        kind = getattr(part, "type", None) or (
+            part.get("type") if isinstance(part, dict) else None
+        )
         if kind == "reasoning":
             text = getattr(part, "reasoning", None)
             if text is None and isinstance(part, dict):
@@ -687,12 +958,16 @@ def render_transcript(sample: Any) -> str:
                 name = message.get("function")
             name = name or "tool"
             text = _message_text(message)
-            blocks.append(f"======== turn {index} | tool | {name} ========\n[tool {name}]\n{text}")
+            blocks.append(
+                f"======== turn {index} | tool | {name} ========\n[tool {name}]\n{text}"
+            )
             continue
         lines = [f"======== turn {index} | {role} ========"]
         lines.extend(_content_blocks(message))
         for call in _calls(message):
-            lines.append(f"[call {_call_name(call)}]\nparameters:\n{_pretty(_call_arguments(call))}")
+            lines.append(
+                f"[call {_call_name(call)}]\nparameters:\n{_pretty(_call_arguments(call))}"
+            )
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
@@ -709,7 +984,8 @@ def _raw_turns(sample: Any) -> list[dict[str, Any]]:
                 name = message.get("function")
             turn["name"] = name or "tool"
         calls = [
-            {"name": _call_name(call), "arguments": _call_arguments(call)} for call in _calls(message)
+            {"name": _call_name(call), "arguments": _call_arguments(call)}
+            for call in _calls(message)
         ]
         if calls:
             turn["tool_calls"] = calls
@@ -753,7 +1029,9 @@ def sample_target(sample: Any) -> str:
             for step in steps:
                 if not isinstance(step, dict):
                     continue
-                lines.append(f"  {step.get('name')}({_text_cell(step.get('arguments'))})")
+                lines.append(
+                    f"  {step.get('name')}({_text_cell(step.get('arguments'))})"
+                )
             parts.append("\n".join(lines))
     if parts:
         return "\n\n".join(parts)
@@ -770,7 +1048,9 @@ def sample_target(sample: Any) -> str:
 
 def _user_question(sample: Any) -> str:
     for message in getattr(sample, "messages", None) or []:
-        role = getattr(message, "role", None) or (message.get("role") if isinstance(message, dict) else None)
+        role = getattr(message, "role", None) or (
+            message.get("role") if isinstance(message, dict) else None
+        )
         if role == "user":
             return _message_text(message)
     return ""
@@ -779,7 +1059,9 @@ def _user_question(sample: Any) -> str:
 def _final_answer(sample: Any) -> str:
     answer = ""
     for message in getattr(sample, "messages", None) or []:
-        role = getattr(message, "role", None) or (message.get("role") if isinstance(message, dict) else None)
+        role = getattr(message, "role", None) or (
+            message.get("role") if isinstance(message, dict) else None
+        )
         if role == "assistant":
             text = _message_text(message)
             if text:
@@ -856,25 +1138,31 @@ def _sample_judge_fields(sample: Any) -> dict[str, Any]:
     return fields
 
 
+def _is_judge_column(key: str) -> bool:
+    """Per-judge verdict columns. A benchmark metric such as ``deepseek-v3.2/summ`` is not one."""
+    return key.endswith("/output") or (key.endswith("/match") and key != "match")
+
+
 def sample_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
-    """Fixed sample columns, then each judge's score and output, sorted by model id."""
-    slugs = sorted(
-        {
-            key[: -len("/match")]
-            for row in rows
-            for key in row
-            if key.endswith("/match") and key != "match" and "/" in key
-        }
-    )
-    extra = tuple(column for slug in slugs for column in (f"{slug}/match", f"{slug}/output"))
-    return SAMPLE_COLUMNS + extra
+    """Column order of the rows. Each benchmark contributes only the metrics it scored."""
+    ordered: list[str] = []
+    for row in rows:
+        for key in row:
+            if key not in ordered:
+                ordered.append(key)
+    return tuple(ordered)
 
 
 def trace_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
-    """Sample columns, then target and the two trace texts, then each judge."""
-    sample_cols = sample_table_columns(rows)
-    judges = sample_cols[len(SAMPLE_COLUMNS) :]
-    return SAMPLE_COLUMNS + ("target", "raw_trace", "readable_trace") + judges
+    """Shared fields and this benchmark's metrics, then the trace texts, then each judge."""
+    keys: list[str] = []
+    for row in rows:
+        for key in row:
+            if key not in keys and key not in ("target", "raw_trace", "readable_trace"):
+                keys.append(key)
+    body = [key for key in keys if not _is_judge_column(key)]
+    judges = [key for key in keys if _is_judge_column(key)]
+    return tuple(body + ["target", "raw_trace", "readable_trace"] + judges)
 
 
 _TRACE_TEXT = frozenset(
@@ -902,14 +1190,14 @@ def _trace_dtype(column: str) -> type:
 
 
 def _trace_value(column: str, value: Any) -> Any:
-    """A filled cell. ``optional=False`` rejects None, which is what leaves the viewer empty."""
+    """A cell for the traces table. A missing metric stays blank rather than becoming 0."""
     kind = _trace_dtype(column)
     if kind is str:
         if value is None:
             return ""
         return value if isinstance(value, str) else _text_cell(value)
     if value is None:
-        return kind(0)
+        return None
     return kind(value)
 
 
@@ -937,11 +1225,83 @@ def _sample_id(sample: Any) -> str:
     return sample_id
 
 
+# Metric columns, when a run actually has them. GeoBenchX keeps tao before match.
+_METRIC_ORDER = (
+    "tao",
+    "tio",
+    "tem",
+    "param_acc",
+    "inst",
+    "tool",
+    "argn",
+    "argv",
+    "any_order",
+    "same_order",
+    "unique",
+    "gen_success",
+    "n_steps",
+    "perception",
+    "operation",
+    "logic",
+    "gis",
+    "match",
+    "length_diff",
+)
+
+
+def _metric_sort(keys: set[str]) -> list[str]:
+    preferred = [key for key in _METRIC_ORDER if key in keys]
+    bare = sorted(key for key in keys if key not in _METRIC_ORDER and "/" not in key)
+    judged = sorted(key for key in keys if "/" in key and key not in _METRIC_ORDER)
+    return preferred + bare + judged
+
+
+def _charted_cells(sample: Any) -> dict[str, float]:
+    """Earth-Bench and GeoBenchX score cells that this sample actually has."""
+    flat = _score_map(getattr(sample, "scores", None))
+    cells: dict[str, float] = {}
+    for name in _STEP_SCORES:
+        if name in flat:
+            cells[name] = flat[name]
+    if any(
+        key == "merged/match"
+        or (key.endswith("/match") and not key.startswith("merged/"))
+        for key in flat
+    ):
+        match = flat.get("merged/match")
+        if match is None:
+            match = _named(flat, "match")
+        if match is not None:
+            cells["match"] = match
+    length = _named(flat, "length_diff")
+    if length is not None:
+        cells["length_diff"] = length
+    return cells
+
+
 def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
-    """Per-sample scores, the tool-name chain, and the full tool-call trace."""
+    """Per-sample scores for this benchmark, plus the conversation and tool trace.
+
+    Metric columns are the scores present on the run. A step-mode OpenEarthAgent
+    row carries ``inst``, ``tool``, ``argn``, ``argv``, and one ``summ`` per
+    judge. It does not carry Earth-Bench or GeoBenchX columns.
+    """
+    rows_in = list(samples or [])
+    native = _native_value_rows(rows_in, _regime_of(rows_in))
+    charted = [_charted_cells(sample) for sample in rows_in]
+    metric_keys = _metric_sort(
+        {
+            key
+            for cells in (*charted, *native)
+            for key, value in cells.items()
+            if value is not None
+            and key != "trajectory_accuracy"
+            and not key.endswith("/trajectory_accuracy")
+        }
+    )
     rows: list[dict[str, Any]] = []
-    for sample in samples or []:
-        flat = _score_map(getattr(sample, "scores", None))
+    for sample, own, shared in zip(rows_in, native, charted, strict=True):
+        metrics = {**shared, **own}
         entries = _trace_entries(getattr(sample, "store", None))
         names = [str(entry["name"]) for entry in entries if entry.get("name")]
         metadata = getattr(sample, "metadata", None) or {}
@@ -952,12 +1312,7 @@ def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
                 "final_answer": _final_answer(sample),
                 "transcript": render_transcript(sample),
                 "kind": _text_cell(metadata.get("kind")),
-                "tao": flat.get("tao"),
-                "tio": flat.get("tio"),
-                "tem": flat.get("tem"),
-                "param_acc": flat.get("param_acc"),
-                "match": flat.get("merged/match", _named(flat, "match")),
-                "length_diff": _named(flat, "length_diff"),
+                **{key: metrics.get(key) for key in metric_keys},
                 "n_tool_calls": len(names),
                 "tool_trace": " -> ".join(names),
                 **_sample_judge_fields(sample),
@@ -983,25 +1338,31 @@ def _as_table(
     columns: tuple[str, ...],
     rows: list[dict[str, Any]],
     dtypes: tuple[type, ...] | None = None,
+    *,
+    optional: bool = False,
 ) -> Any:
     import wandb
 
     data = [[row.get(column) for column in columns] for row in rows]
     if dtypes is None:
         return wandb.Table(columns=list(columns), data=data)
-    return wandb.Table(columns=list(columns), data=data, dtype=list(dtypes), optional=False)
+    return wandb.Table(
+        columns=list(columns), data=data, dtype=list(dtypes), optional=optional
+    )
 
 
-def _drop_stale_summary(run: Any, benchmark: str) -> None:
-    """Remove the previous ``{benchmark}/by/...`` keys from an updated run.
+def _drop_stale_summary(run: Any, benchmark: str, keep: set[str]) -> None:
+    """Remove summary keys this publish no longer writes.
 
-    W&B stores a slash key either as one string or as nested sections. Both
-    shapes are removed.
+    A second publish used to leave ``accuracy_other_key`` and the trajectory
+    judges in place. W&B stores a slash key either as one string or as nested
+    sections. The old ``{benchmark}/by/...`` section is removed either way.
     """
-    prefix = f"{benchmark}/by/"
+    prefix = f"{benchmark}/"
+    by_prefix = f"{benchmark}/by/"
     for key in list(run.summary.keys()):
         text = str(key)
-        if text.startswith(prefix):
+        if text.startswith(by_prefix) or (text.startswith(prefix) and text not in keep):
             del run.summary[key]
             continue
         if text != benchmark:
@@ -1025,6 +1386,74 @@ def _log_trace_artifact(run: Any, benchmark: str, samples: list[Any] | None) -> 
     run.log_artifact(artifact)
 
 
+def comparison_summary(
+    samples: list[Any] | None,
+    scores: list[Any],
+    benchmark: str,
+    *,
+    regime: str | None = None,
+    groups: list[str] | None = None,
+    only: frozenset[str] | None = None,
+) -> dict[str, int | float]:
+    """Summary keys for one run.
+
+    Auto-Planning and Instruction-Following sit under ``{benchmark}/AP`` and
+    ``{benchmark}/IF``. A modality split is another section under that,
+    ``earth_bench/AP/spectrum/accuracy``. ``only`` drops score names the task
+    did not declare (another answer key, a trajectory judge).
+    """
+    root = metric_root(benchmark, regime)
+    summary = summary_metrics(scores, root)
+    summary.update(
+        native_metrics(samples, root, regime=regime, scores=scores, only=only)
+    )
+    # Step scores are on each sample. A killed eval never writes the results
+    # block, so those four keys would otherwise be missing at the top.
+    flats = [_score_map(getattr(sample, "scores", None)) for sample in samples or []]
+    from_samples = _subset_summary(flats, root)
+    for name in _STEP_SCORES:
+        if only is not None and name not in only:
+            continue
+        key = f"{root}/{name}"
+        if key not in summary and key in from_samples:
+            summary[key] = from_samples[key]
+    summary.update(
+        grouped_metrics(samples, root, list(groups or []), regime=regime, only=only)
+    )
+    summary.update(dashboard_aliases(summary, root))
+    return summary
+
+
+_SECRET_KEY = re.compile(
+    r"(api[_-]?key|token|secret|password|authorization)", re.IGNORECASE
+)
+
+
+def _redact(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "[redacted]" if _SECRET_KEY.search(str(key)) else _redact(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    return value
+
+
+def run_config_yaml(log: Any) -> str:
+    """The Inspect ``--run-config`` document for this log, as YAML.
+
+    Inspect builds that document from the finished log in
+    ``eval_log_to_run_config_dict`` (``inspect_ai/log/_config.py``). A run
+    started from the CLI has no file in ``configs/``; this is that invocation.
+    """
+    import yaml
+    from inspect_ai.log._config import eval_log_to_run_config_dict
+
+    document = _redact(eval_log_to_run_config_dict(log))
+    return yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
+
+
 def publish(run: Any, log: Any, samples: Any = None) -> None:
     """Write the summary, log the workspace charts once, and store the conversation.
 
@@ -1034,20 +1463,37 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
     results = getattr(log, "results", None)
     scores = list(getattr(results, "scores", None) or [])
     spec = getattr(log, "eval", None)
-    benchmark = benchmark_name(
-        getattr(spec, "metadata", None),
-        getattr(spec, "task", None),
-    )
-    summary = summary_metrics(scores, benchmark)
+    metadata = getattr(spec, "metadata", None) or {}
+    if not isinstance(metadata, dict):
+        metadata = dict(metadata)
+    benchmark = benchmark_name(metadata, getattr(spec, "task", None))
     if samples is None:
         samples = getattr(log, "samples", None)
-    groups = (getattr(spec, "metadata", None) or {}).get("summary_groups") or []
+    regime = metadata.get("regime") if isinstance(metadata.get("regime"), str) else None
+    groups = metadata.get("summary_groups") or []
     if isinstance(groups, str):
         groups = [groups]
-    summary.update(grouped_metrics(samples, benchmark, [str(field) for field in groups]))
-    summary.update(dashboard_aliases(summary, benchmark))
+    summary = comparison_summary(
+        samples,
+        scores,
+        benchmark,
+        regime=regime,
+        groups=[str(field) for field in groups],
+        only=published_names(metadata),
+    )
     run.name = model_run_name(getattr(spec, "model", None), benchmark)
-    _drop_stale_summary(run, benchmark)
+    label = regime_label(regime)
+    modality = metadata.get("modality")
+    try:
+        recorded: dict[str, Any] = {"run_config": run_config_yaml(log)}
+        if label is not None:
+            recorded["regime"] = label
+        if isinstance(modality, str) and modality.strip():
+            recorded["modality"] = modality.strip()
+        run.config.update(recorded, allow_val_change=True)
+    except Exception:
+        logger.exception("W&B run config was not recorded")
+    _drop_stale_summary(run, benchmark, set(summary))
     for key, value in summary.items():
         run.summary[key] = value
     # One history row for the whole block, including class splits and judge
@@ -1061,8 +1507,15 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
             SAMPLES_KEY: _as_table(sample_table_columns(rows), rows),
             TRACES_KEY: _as_table(
                 trace_columns,
-                [{column: _trace_value(column, row.get(column)) for column in trace_columns} for row in traces],
+                [
+                    {
+                        column: _trace_value(column, row.get(column))
+                        for column in trace_columns
+                    }
+                    for row in traces
+                ],
                 tuple(_trace_dtype(column) for column in trace_columns),
+                optional=True,
             ),
             METRICS_KEY: _as_table(METRICS_COLUMNS, results_rows(scores, benchmark)),
         }
@@ -1089,7 +1542,9 @@ class WandbCompare(Hooks):
         spec = data.spec
         run.name = model_run_name(
             getattr(spec, "model", None),
-            benchmark_name(getattr(spec, "metadata", None), getattr(spec, "task", None)),
+            benchmark_name(
+                getattr(spec, "metadata", None), getattr(spec, "task", None)
+            ),
         )
 
     async def on_sample_end(self, data: SampleEnd) -> None:
