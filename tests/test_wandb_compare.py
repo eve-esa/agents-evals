@@ -10,9 +10,13 @@ from agentic_evals.agents.trace_callback import TRACE_KEY
 from agentic_evals.wandb_compare import (
     METRICS_COLUMNS,
     SAMPLE_COLUMNS,
+    comparison_summary,
     dashboard_aliases,
+    metric_root,
     model_run_name,
     grouped_metrics,
+    native_metrics,
+    published_names,
     _trace_dtype,
     _trace_value,
     example_trace_rows,
@@ -110,7 +114,10 @@ def test_summary_keys_and_results_table() -> None:
     assert "geobenchx/tao" not in aliases
     assert "geobenchx/llm_as_judge/qwen_qwen3.8-27b/n" not in aliases
     assert model_run_name("openai-api/openrouter/qwen/qwen3.8-27b") == "qwen3.8-27b"
-    assert model_run_name("openai-api/openrouter/qwen/qwen3.8-27b", "geobenchx") == "qwen3.8-27b_geobenchx"
+    assert (
+        model_run_name("openai-api/openrouter/qwen/qwen3.8-27b", "geobenchx")
+        == "qwen3.8-27b_geobenchx"
+    )
     rows = results_rows(scores, "geobenchx")
     assert list(rows[0]) == list(METRICS_COLUMNS)
     by_metric = {row["metric"]: row for row in rows}
@@ -133,21 +140,28 @@ def test_sample_trace_table() -> None:
         metadata={
             "kind": "solvable",
             "reference_solution_description": "Locate Rome.",
-            "reference_solutions": [[{"name": "get_osm_data", "arguments": {"place": "Rome"}}]],
+            "reference_solutions": [
+                [{"name": "get_osm_data", "arguments": {"place": "Rome"}}]
+            ],
         },
         scores={
             "geobenchx_steps": SimpleNamespace(
                 value={"tao": 1.0, "tio": 1.0, "tem": 0.5, "param_acc": 0.5}
             ),
             "geobenchx_scorer": SimpleNamespace(
-                value={"qwen/qwen3.8-27b/match": 2, "qwen/qwen3.8-27b/length_diff": 0.0},
+                value={
+                    "qwen/qwen3.8-27b/match": 2,
+                    "qwen/qwen3.8-27b/length_diff": 0.0,
+                },
                 explanation=None,
             ),
             "geobenchx_merged": SimpleNamespace(value={"merged/match": 2}),
             "trajectory_judge": SimpleNamespace(
                 value={"trajectory_accuracy": 1.0},
                 explanation="the tools match the reference",
-                metadata={"judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"},
+                metadata={
+                    "judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"
+                },
             ),
         },
         messages=[
@@ -155,15 +169,37 @@ def test_sample_trace_table() -> None:
             SimpleNamespace(
                 role="assistant",
                 text="",
-                tool_calls=[SimpleNamespace(function="get_osm_data", arguments={"place": "Rome"})],
+                tool_calls=[
+                    SimpleNamespace(
+                        function="get_osm_data", arguments={"place": "Rome"}
+                    )
+                ],
             ),
-            SimpleNamespace(role="tool", function="get_osm_data", text="ok", tool_calls=None),
-            SimpleNamespace(role="assistant", text="Rome is in Italy.", tool_calls=None),
+            SimpleNamespace(
+                role="tool", function="get_osm_data", text="ok", tool_calls=None
+            ),
+            SimpleNamespace(
+                role="assistant", text="Rome is in Italy.", tool_calls=None
+            ),
         ],
         store={
             TRACE_KEY: [
-                {"step": 1, "agent": "react", "name": "get_osm_data", "input": {"place": "Rome"}, "output": "ok", "error": False},
-                {"step": 2, "agent": "react", "name": "buffer", "input": {"radius": 100}, "output": "polygon", "error": False},
+                {
+                    "step": 1,
+                    "agent": "react",
+                    "name": "get_osm_data",
+                    "input": {"place": "Rome"},
+                    "output": "ok",
+                    "error": False,
+                },
+                {
+                    "step": 2,
+                    "agent": "react",
+                    "name": "buffer",
+                    "input": {"radius": 100},
+                    "output": "polygon",
+                    "error": False,
+                },
             ]
         },
     )
@@ -207,7 +243,9 @@ def test_sample_trace_table() -> None:
     assert "reference 1" in traces[0]["target"]
     assert "get_osm_data" in traces[0]["target"]
     assert traces[0]["readable_trace"] == rows[0]["transcript"]
-    assert "======== turn 3 | tool | get_osm_data ========" in traces[0]["readable_trace"]
+    assert (
+        "======== turn 3 | tool | get_osm_data ========" in traces[0]["readable_trace"]
+    )
     parsed = json.loads(traces[0]["raw_trace"])
     assert parsed["tool_trace"][0]["name"] == "get_osm_data"
     assert parsed["turns"][1]["tool_calls"][0]["arguments"] == {"place": "Rome"}
@@ -216,7 +254,7 @@ def test_sample_trace_table() -> None:
     assert _trace_dtype("n_tool_calls") is int
     assert _trace_dtype("tao") is float
     assert _trace_value("readable_trace", None) == ""
-    assert _trace_value("tao", None) == 0.0
+    assert _trace_value("tao", None) is None
     assert rows[0]["tao"] == 1.0
     assert rows[0]["match"] == 2
     assert rows[0]["length_diff"] == 0.0
@@ -234,7 +272,10 @@ def test_sample_trace_table() -> None:
     assert "reference 1" in saved[0]["target"]
     assert len(saved[0]["trace"]) == 2
     assert saved[0]["readable_trace"].startswith("======== turn 1 | user ========")
-    answered = SimpleNamespace(target="B", metadata={"reference_solutions": [[{"name": "reject_task", "arguments": {}}]]})
+    answered = SimpleNamespace(
+        target="B",
+        metadata={"reference_solutions": [[{"name": "reject_task", "arguments": {}}]]},
+    )
     assert sample_target(answered) == "B"
 
 
@@ -242,7 +283,9 @@ def test_each_class_repeats_the_summary() -> None:
     solvable = SimpleNamespace(
         metadata={"kind": "solvable", "labels": ["Spatial operations"]},
         scores={
-            "steps": SimpleNamespace(value={"tao": 1.0, "tio": 0.5, "tem": 0.0, "param_acc": 0.0}),
+            "steps": SimpleNamespace(
+                value={"tao": 1.0, "tio": 0.5, "tem": 0.0, "param_acc": 0.0}
+            ),
             "judge": SimpleNamespace(
                 value={
                     "qwen/qwen3.8-27b/match": 1.0,
@@ -255,9 +298,14 @@ def test_each_class_repeats_the_summary() -> None:
         },
     )
     unsolvable = SimpleNamespace(
-        metadata={"kind": "unsolvable", "labels": ["Spatial operations", "Heatmaps, Contour Lines"]},
+        metadata={
+            "kind": "unsolvable",
+            "labels": ["Spatial operations", "Heatmaps, Contour Lines"],
+        },
         scores={
-            "steps": SimpleNamespace(value={"tao": 0.0, "tio": 0.0, "tem": 0.0, "param_acc": 0.0}),
+            "steps": SimpleNamespace(
+                value={"tao": 0.0, "tio": 0.0, "tem": 0.0, "param_acc": 0.0}
+            ),
             "judge": SimpleNamespace(
                 value={
                     "qwen/qwen3.8-27b/match": 0.0,
@@ -343,6 +391,213 @@ def test_panel_share_weights_each_judge_once_when_one_skips_a_task() -> None:
     assert kept["geobenchx/solvable_incl_control/n"] == 2
     assert kept["geobenchx/llm_as_judge_avg"] == 0.75
     assert not any(key.endswith("/median") or key.endswith("/tao") for key in kept)
+
+
+def _panel_score(model: str, tool: float, answer: float | None) -> SimpleNamespace:
+    value = {"inst": 1.0, "tool": tool, "argn": 1.0, "argv": 0.0}
+    if answer is not None:
+        value["answer"] = answer
+    return SimpleNamespace(value=value, metadata={"judge_model": model})
+
+
+def test_openearthagent_trace_table_uses_its_own_metrics() -> None:
+    judges = {
+        "deepseek-v3.2": "openai-api/openrouter/deepseek/deepseek-v3.2",
+        "gpt-6-luna": "openai-api/openrouter/openai/gpt-6-luna",
+    }
+    sample = SimpleNamespace(
+        id="0:6",
+        epoch=1,
+        target="",
+        metadata={"regime": "step", "kind": ""},
+        scores={
+            leaf: _panel_score(model, 1.0, answer)
+            for (leaf, model), answer in zip(judges.items(), (-1.0, 0.5), strict=True)
+        },
+        messages=[
+            SimpleNamespace(role="user", text="Where is the port?", tool_calls=None)
+        ],
+        store={},
+    )
+
+    rows = example_trace_rows([sample])
+    columns = trace_table_columns(rows)
+
+    assert "tao" not in columns
+    assert "match" not in columns
+    assert "inst" in columns
+    assert "tool" in columns
+    assert "argn" in columns
+    assert "argv" in columns
+    assert "deepseek-v3.2/summ" in columns
+    assert "gpt-6-luna/summ" in columns
+    assert rows[0]["tool"] == 1.0
+    assert rows[0]["deepseek-v3.2/summ"] == -1.0
+    assert rows[0]["gpt-6-luna/summ"] == 0.5
+    assert rows[0]["n_tool_calls"] == 0
+    assert "sample_id" in columns and "readable_trace" in columns
+
+
+def test_openearthagent_panel_keeps_one_tool_score_and_four_summ_keys() -> None:
+    judges = {
+        "deepseek-v3.2": "openai-api/openrouter/deepseek/deepseek-v3.2",
+        "gpt-6-luna": "openai-api/openrouter/openai/gpt-6-luna",
+        "qwen3.8-flash": "openai-api/openrouter/qwen/qwen3.8-flash",
+        "mistral-large-2512": "openai-api/mistral/mistral-large-2512",
+    }
+    # The second sample has no answer, so that NaN stays out of each Summ mean.
+    answers = (
+        {
+            "deepseek-v3.2": -1.0,
+            "gpt-6-luna": 1.0,
+            "qwen3.8-flash": 0.5,
+            "mistral-large-2512": 1.0,
+        },
+        {
+            "deepseek-v3.2": None,
+            "gpt-6-luna": 0.99,
+            "qwen3.8-flash": 1.0,
+            "mistral-large-2512": 0.975,
+        },
+    )
+    samples = [
+        SimpleNamespace(
+            metadata={"regime": "step", "input_kind": "text", "task_kind": "answer"},
+            scores={
+                f"judge-{leaf}": _panel_score(model, 1.0, row[leaf])
+                for leaf, model in judges.items()
+            },
+        )
+        for row in answers
+    ]
+
+    summary = native_metrics(samples, "openearthagent", regime="step")
+
+    assert summary["openearthagent/tool"] == 1.0
+    assert summary["openearthagent/inst"] == 1.0
+    assert summary["openearthagent/argn"] == 1.0
+    assert summary["openearthagent/argv"] == 0.0
+    assert "openearthagent/summ" not in summary
+    assert "openearthagent/answer" not in summary
+    assert summary["openearthagent/deepseek-v3.2/summ"] == -1.0
+    assert summary["openearthagent/gpt-6-luna/summ"] == 0.995
+    assert summary["openearthagent/qwen3.8-flash/summ"] == 0.75
+    assert summary["openearthagent/mistral-large-2512/summ"] == 0.9875
+    assert not any(key.endswith("/tool") and key.count("/") > 1 for key in summary)
+
+    grouped = grouped_metrics(samples, "openearthagent", ["input_kind"], regime="step")
+    assert grouped["openearthagent/text/tool"] == 1.0
+    assert grouped["openearthagent/text/argv"] == 0.0
+    assert "openearthagent/text/summ" not in grouped
+    assert grouped["openearthagent/text/deepseek-v3.2/summ"] == -1.0
+    assert grouped["openearthagent/text/gpt-6-luna/summ"] == 0.995
+    assert grouped["openearthagent/text/qwen3.8-flash/summ"] == 0.75
+    assert grouped["openearthagent/text/mistral-large-2512/summ"] == 0.9875
+
+
+def test_openearthagent_e2e_answer_is_ans_and_f1_is_shared() -> None:
+    sample = SimpleNamespace(
+        metadata={"regime": "e2e"},
+        scores={
+            "openearthagent_scorer": _panel_score(
+                "openai-api/openrouter/deepseek/deepseek-v3.2", 1.0, 0.2
+            ),
+            "openearthagent_scorer1": _panel_score(
+                "openai-api/openrouter/openai/gpt-6-luna", 1.0, 0.4
+            ),
+        },
+    )
+    sample.scores["openearthagent_scorer"].value["any_order"] = 1.0
+    sample.scores["openearthagent_scorer1"].value["any_order"] = 1.0
+    f1 = {
+        "perception": SimpleNamespace(
+            name="perception", group="category_f1", value=0.5
+        ),
+        "operation": SimpleNamespace(name="operation", group="category_f1", value=0.25),
+    }
+    scores = [
+        SimpleNamespace(
+            scorer="openearthagent_scorer", name="openearthagent_scorer", metrics=f1
+        ),
+        SimpleNamespace(
+            scorer="openearthagent_scorer1", name="openearthagent_scorer1", metrics=f1
+        ),
+    ]
+
+    summary = native_metrics([sample], "openearthagent", regime="e2e", scores=scores)
+
+    assert summary["openearthagent/any_order"] == 1.0
+    assert summary["openearthagent/deepseek-v3.2/ans"] == 0.2
+    assert summary["openearthagent/gpt-6-luna/ans"] == 0.4
+    assert "openearthagent/summ" not in summary
+    assert summary["openearthagent/perception"] == 0.5
+    assert summary["openearthagent/operation"] == 0.25
+    assert not any("/perception" in key and key.count("/") > 1 for key in summary)
+
+
+def test_earth_bench_charts_are_the_paper_metrics_under_the_regime() -> None:
+    # Feng et al., Section 4 and Appendix B.2: AP and IF are separate, and the
+    # chart is accuracy, efficiency, and the four step scores. Modality is a
+    # section under the regime. accuracy_other_key and trajectory judges are not.
+    only = published_names(
+        {
+            "published_metrics": [
+                "accuracy",
+                "efficiency",
+                "tao",
+                "tio",
+                "tem",
+                "param_acc",
+            ]
+        }
+    )
+    assert metric_root("earth_bench", "ap") == "earth_bench/AP"
+    assert metric_root("earth_bench", "if") == "earth_bench/IF"
+    assert metric_root("openearthagent", "step") == "openearthagent"
+    sample = SimpleNamespace(
+        metadata={"modality": "spectrum", "regime": "ap"},
+        scores={
+            "earth_bench_scorer": SimpleNamespace(
+                value={
+                    "accuracy": 1.0,
+                    "accuracy_other_key": 0.0,
+                    "efficiency": 1.5,
+                    "tao": 0.5,
+                    "tio": 0.25,
+                    "tem": 0.0,
+                    "param_acc": 0.0,
+                    "tool_errors": 3.0,
+                    "perception_failures": 1.0,
+                }
+            ),
+            "trajectory_judge": SimpleNamespace(
+                value={"trajectory_accuracy": 1.0},
+                metadata={
+                    "judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"
+                },
+            ),
+        },
+    )
+    summary = comparison_summary(
+        [sample],
+        [],
+        "earth_bench",
+        regime="ap",
+        groups=["modality"],
+        only=only,
+    )
+    assert summary["earth_bench/AP/accuracy"] == 1.0
+    assert summary["earth_bench/AP/efficiency"] == 1.5
+    assert summary["earth_bench/AP/tao"] == 0.5
+    assert summary["earth_bench/AP/spectrum/accuracy"] == 1.0
+    assert summary["earth_bench/AP/spectrum/tao"] == 0.5
+    assert not any(
+        "accuracy_other_key" in key or "trajectory_accuracy" in key for key in summary
+    )
+    assert not any(
+        key.endswith("/tool_errors") or key.endswith("/perception_failures")
+        for key in summary
+    )
 
 
 def test_sample_end_records_fill_an_empty_task_log() -> None:
