@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import sys
+from datetime import timedelta
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -22,12 +23,21 @@ from agentic_evals.paths import EARTH_BENCH_DATA, RUNS_DIR
 KITS = ("Analysis", "Index", "Inversion", "Perception", "Statistics")
 
 # Returned as a normal observation by Perception's get_model_output when its
-# precomputed lookup fails (bare ``except: pass``); see AGENTS.md.
+# precomputed lookup fails (bare ``except: pass``).
 PERCEPTION_FAILURE = "Failed to call model"
 
 # Vendored lookup. Perception.py reads the same file via its own __file__.
 PERCEPTION_LOOKUP = Path(__file__).resolve().parent / "model_results.csv"
 _TOOLS_DIR = Path(__file__).resolve().parent
+_STDIO_GUARD = _TOOLS_DIR / "stdio_guard.py"
+
+# mcp ClientSession read_timeout_seconds defaults to None, and send_request
+# then calls anyio.fail_after(None), which does not expire
+# (mcp/shared/session.py). A tool result that shares a stdout line with a
+# print() never parses, and the sample (and the eval) wait until the process
+# is killed. Raster tools on this benchmark finish well inside this window;
+# the bound is a backstop, not a figure from the paper.
+TOOL_RESPONSE_TIMEOUT = timedelta(minutes=20)
 
 
 def ported_code_sha256() -> str:
@@ -39,28 +49,43 @@ def ported_code_sha256() -> str:
     return digest.hexdigest()
 
 
-def kit_servers(output_dir: Path, *, root: Path = EARTH_BENCH_DATA) -> dict[str, dict[str, Any]]:
+def kit_servers(
+    output_dir: Path, *, root: Path = EARTH_BENCH_DATA
+) -> dict[str, dict[str, Any]]:
     root.mkdir(parents=True, exist_ok=True)
     missing = [kit for kit in KITS if not (_TOOLS_DIR / f"{kit}.py").is_file()]
     if missing:
-        raise FileNotFoundError(f"Earth-Bench kits missing from {_TOOLS_DIR}: {', '.join(missing)}")
+        raise FileNotFoundError(
+            f"Earth-Bench kits missing from {_TOOLS_DIR}: {', '.join(missing)}"
+        )
     return {
         kit: {
             "transport": "stdio",
             "command": sys.executable,
-            "args": [str(_TOOLS_DIR / f"{kit}.py"), "--temp_dir", str(output_dir)],
+            "args": [
+                str(_STDIO_GUARD),
+                str(_TOOLS_DIR / f"{kit}.py"),
+                "--temp_dir",
+                str(output_dir),
+            ],
             "cwd": str(root),
             "env": {
                 "FASTMCP_LOG_LEVEL": "WARNING",
                 "PYTHONWARNINGS": "ignore",
             },
+            "session_kwargs": {"read_timeout_seconds": TOOL_RESPONSE_TIMEOUT},
         }
         for kit in KITS
     }
 
 
 def sample_output_dir(state: TaskState) -> Path:
-    path = RUNS_DIR / "earth_bench" / f"question{state.sample_id}" / f"epoch{state.epoch}-{state.uuid}"
+    path = (
+        RUNS_DIR
+        / "earth_bench"
+        / f"question{state.sample_id}"
+        / f"epoch{state.epoch}-{state.uuid}"
+    )
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -98,7 +123,11 @@ def _scalar_str_params(tools_dir: str) -> dict[str, frozenset[str]]:
                 continue
             names = {
                 arg.arg
-                for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)
+                for arg in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                )
                 if arg.annotation is not None and ast.unparse(arg.annotation) == "str"
             }
             if names:
