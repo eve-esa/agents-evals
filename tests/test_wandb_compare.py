@@ -10,7 +10,10 @@ from agentic_evals.agents.trace_callback import TRACE_KEY
 from agentic_evals.wandb_compare import (
     METRICS_COLUMNS,
     SAMPLE_COLUMNS,
+    _redact,
     comparison_summary,
+    guide_html,
+    metric_guide,
     dashboard_aliases,
     metric_root,
     model_run_name,
@@ -434,6 +437,8 @@ def test_openearthagent_trace_table_uses_its_own_metrics() -> None:
     assert rows[0]["tool"] == 1.0
     assert rows[0]["deepseek-v3.2/summ"] == -1.0
     assert rows[0]["gpt-6-luna/summ"] == 0.5
+    assert rows[0]["avg_summ"] == -0.25
+    assert columns.index("avg_summ") > columns.index("gpt-6-luna/summ")
     assert rows[0]["n_tool_calls"] == 0
     assert "sample_id" in columns and "readable_trace" in columns
 
@@ -483,6 +488,13 @@ def test_openearthagent_panel_keeps_one_tool_score_and_four_summ_keys() -> None:
     assert summary["openearthagent/gpt-6-luna/summ"] == 0.995
     assert summary["openearthagent/qwen3.8-flash/summ"] == 0.75
     assert summary["openearthagent/mistral-large-2512/summ"] == 0.9875
+    judge_means = [
+        summary["openearthagent/deepseek-v3.2/summ"],
+        summary["openearthagent/gpt-6-luna/summ"],
+        summary["openearthagent/qwen3.8-flash/summ"],
+        summary["openearthagent/mistral-large-2512/summ"],
+    ]
+    assert summary["openearthagent/avg_summ"] == sum(judge_means) / len(judge_means)
     assert not any(key.endswith("/tool") and key.count("/") > 1 for key in summary)
 
     grouped = grouped_metrics(samples, "openearthagent", ["input_kind"], regime="step")
@@ -493,6 +505,7 @@ def test_openearthagent_panel_keeps_one_tool_score_and_four_summ_keys() -> None:
     assert grouped["openearthagent/text/gpt-6-luna/summ"] == 0.995
     assert grouped["openearthagent/text/qwen3.8-flash/summ"] == 0.75
     assert grouped["openearthagent/text/mistral-large-2512/summ"] == 0.9875
+    assert grouped["openearthagent/text/avg_summ"] == sum(judge_means) / len(judge_means)
 
 
 def test_openearthagent_e2e_answer_is_ans_and_f1_is_shared() -> None:
@@ -532,6 +545,10 @@ def test_openearthagent_e2e_answer_is_ans_and_f1_is_shared() -> None:
     assert "openearthagent/summ" not in summary
     assert summary["openearthagent/perception"] == 0.5
     assert summary["openearthagent/operation"] == 0.25
+    assert summary["openearthagent/avg_ans"] == (
+        summary["openearthagent/deepseek-v3.2/ans"]
+        + summary["openearthagent/gpt-6-luna/ans"]
+    ) / 2
     assert not any("/perception" in key and key.count("/") > 1 for key in summary)
 
 
@@ -553,7 +570,9 @@ def test_earth_bench_charts_are_the_paper_metrics_under_the_regime() -> None:
     )
     assert metric_root("earth_bench", "ap") == "earth_bench/AP"
     assert metric_root("earth_bench", "if") == "earth_bench/IF"
-    assert metric_root("openearthagent", "step") == "openearthagent"
+    assert metric_root("openearthagent", "step") == "openearthagent/step"
+    assert metric_root("openearthagent", "e2e") == "openearthagent/e2e"
+    assert metric_root("geobenchx", "step") == "geobenchx"
     sample = SimpleNamespace(
         metadata={"modality": "spectrum", "regime": "ap"},
         scores={
@@ -606,3 +625,171 @@ def test_sample_end_records_fill_an_empty_task_log() -> None:
     assert samples_for_table([], collected) == collected
     logged = [SimpleNamespace(id="from-log")]
     assert samples_for_table(logged, []) == logged
+
+
+def test_run_config_redact_keeps_max_tokens() -> None:
+    redacted = _redact({"max_tokens": 256, "OPENAI_API_KEY": "sk-test", "access_token": "abc"})
+    assert redacted["max_tokens"] == 256
+    assert redacted["OPENAI_API_KEY"] == "[redacted]"
+    assert redacted["access_token"] == "[redacted]"
+
+
+def test_earth_bench_guide_explains_ap_if_and_modality() -> None:
+    text = metric_guide({"benchmark": "earth_bench", "regime": "ap", "modality": "spectrum"})
+    assert "Auto-Planning" in text
+    assert "Instruction-Following" in text
+    assert "agent chooses the tools" in text
+    assert "question lists the steps" in text
+    assert "`spectrum`" in text
+    assert "earth_bench/AP/spectrum/accuracy" in text
+    assert "`efficiency`" in text
+    assert "`tao`" in text
+    html = guide_html(text)
+    assert "<h1>Earth-Bench</h1>" in html
+    assert "<code>spectrum</code>" in html
+    assert "<li>" in html
+
+
+def test_openearthagent_step_guide_explains_the_table_and_the_judge() -> None:
+    text = metric_guide(
+        {
+            "benchmark": "openearthagent",
+            "regime": "step",
+            "vision": False,
+            "judges": "openai/gpt-4.1",
+        }
+    )
+    assert "Table 3" in text
+    assert "**e2e**" in text
+    assert "`summ`" in text
+    assert "times 100" in text
+    assert "533 image tasks" in text
+    assert "`openai/gpt-4.1`" in text
+    assert "own key" in text
+    assert "gpt-4o-mini" in text
+    assert "openearthagent/step/" in text
+
+
+def test_openearthagent_regime_is_a_section_like_earth_bench() -> None:
+    sample = SimpleNamespace(
+        metadata={"regime": "step", "task_kind": "answer"},
+        scores={"openearthagent_step": _panel_score("openai/gpt-4o-mini", 1.0, 1.0)},
+    )
+    summary = comparison_summary(
+        [sample], [], "openearthagent", regime="step", groups=["task_kind"]
+    )
+    assert summary["openearthagent/step/tool"] == 1.0
+    assert summary["openearthagent/step/summ"] == 1.0
+    assert summary["openearthagent/step/answer/summ"] == 1.0
+    assert "openearthagent/step/avg_summ" not in summary
+    assert "openearthagent/tool" not in summary
+    assert "openearthagent/summ" not in summary
+
+
+def test_openearthagent_tables_omit_scores_outside_the_paper() -> None:
+    sample = SimpleNamespace(
+        id="1",
+        epoch=1,
+        target="",
+        metadata={"regime": "e2e", "kind": ""},
+        scores={
+            "openearthagent_scorer": SimpleNamespace(
+                value={
+                    "any_order": 1.0,
+                    "answer": 0.5,
+                    "tao": 0.2,
+                    "tio": 0.2,
+                    "tem": 0.2,
+                    "param_acc": 0.1,
+                    "n_steps": 3.0,
+                },
+                metadata={"judge_model": "openai/gpt-4o-mini"},
+            ),
+            "trajectory_judge": SimpleNamespace(
+                value={"trajectory_accuracy": 1.0},
+                metadata={
+                    "judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"
+                },
+            ),
+        },
+        messages=[],
+        store={},
+    )
+    columns = trace_table_columns(example_trace_rows([sample]))
+    assert "any_order" in columns
+    assert "n_steps" in columns
+    assert "ans" in columns
+    assert not any(
+        column in {"tao", "tio", "tem", "param_acc"}
+        or column.endswith(("/match", "/output", "/trajectory_accuracy"))
+        or "trajectory" in column
+        for column in columns
+    )
+
+    earth = SimpleNamespace(
+        id="2",
+        epoch=1,
+        target="",
+        metadata={"regime": "ap", "kind": ""},
+        scores={
+            "earth_bench_scorer": SimpleNamespace(value={"tao": 0.5, "accuracy": 1.0}),
+            "trajectory_judge": SimpleNamespace(
+                value={"trajectory_accuracy": 1.0},
+                metadata={
+                    "judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"
+                },
+            ),
+        },
+        messages=[],
+        store={},
+    )
+    earth_columns = sample_table_columns(sample_rows([earth]))
+    assert "tao" in earth_columns
+    assert any(column.endswith("/match") for column in earth_columns)
+
+    kept = results_rows(
+        [
+            _score("tao", 0.8),
+            _score("trajectory_accuracy", 0.1),
+            _score("any_order", 1.0),
+        ],
+        "openearthagent",
+    )
+    assert [row["metric"] for row in kept] == ["any_order"]
+    assert [row["metric"] for row in results_rows([_score("tao", 0.8)], "earth_bench")] == [
+        "tao"
+    ]
+
+
+def test_openearthagent_summary_omits_scores_outside_the_paper() -> None:
+    sample = SimpleNamespace(
+        metadata={"regime": "e2e", "task_kind": "answer"},
+        scores={
+            "openearthagent_scorer": SimpleNamespace(
+                value={"any_order": 1.0, "answer": 0.5, "tao": 0.2, "n_steps": 3.0},
+                metadata={"judge_model": "openai/gpt-4o-mini"},
+            ),
+            "trajectory_judge": SimpleNamespace(
+                value={"trajectory_accuracy": 1.0},
+                metadata={"judge_model": "openai-api/openrouter/deepseek/deepseek-v3.2"},
+            ),
+        },
+    )
+    summary = comparison_summary(
+        [sample], [], "openearthagent", regime="e2e", groups=["task_kind"]
+    )
+    assert summary["openearthagent/e2e/any_order"] == 1.0
+    assert summary["openearthagent/e2e/ans"] == 0.5
+    assert not any(
+        key.endswith(("/tao", "/tio", "/tem", "/param_acc", "/trajectory_accuracy"))
+        for key in summary
+    )
+
+
+def test_openearthagent_guide_uses_answer_and_generation_not_a_text_section() -> None:
+    text = metric_guide({"benchmark": "openearthagent", "regime": "e2e", "vision": True})
+    assert "`answer`" in text
+    assert "`generation`" in text
+    assert "`gen_success`" in text
+    assert "openearthagent/e2e/" in text
+    assert "`text`" not in text

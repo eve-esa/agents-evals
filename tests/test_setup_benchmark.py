@@ -46,7 +46,24 @@ def test_skip_data_rejects_a_raster_subset():
         raise AssertionError("expected SystemExit")
 
 
-def test_modality_is_rejected_for_other_benchmarks():
+def test_openearthagent_rejects_earth_bench_filters():
+    try:
+        setup.main(["openearthagent", "--modality", "spectrum"])
+    except SystemExit as exc:
+        assert exc.code != 0
+    else:
+        raise AssertionError("expected SystemExit")
+
+
+def test_tasks_flag_is_openearthagent_only():
+    args = setup.build_parser().parse_args(["openearthagent", "--tasks", "0-2,5"])
+    assert args.tasks == "0-2,5"
+    try:
+        setup.main(["geobenchx", "--tasks", "1"])
+    except SystemExit as exc:
+        assert exc.code != 0
+    else:
+        raise AssertionError("expected SystemExit")
     try:
         setup.main(["eo-gym", "--modality", "spectrum"])
     except SystemExit as exc:

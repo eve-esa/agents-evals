@@ -1,0 +1,51 @@
+# Earth-Bench full Instruction-Following run: EVE-Instruct on this pod.
+#
+# Feng et al., Earth-Agent (ICLR 2026), Table 7. Their runners use
+# temperature 0.1. Instruction-following is a separate regime from
+# auto-planning and is reported on its own.
+#
+# The checkpoint is eve-esa/EVE-Instruct, snapshot
+# eecb769ffb8d22edb409414a12aa9445ab10828b. Its config.json sets
+# model_type mistral and max_position_embeddings 131072. vLLM serves it
+# on this pod at http://127.0.0.1:8000/v1 as eve-esa/EVE-Instruct, with
+# max-model-len 65536 so the ~28k-token tool schema fits in the KV cache
+# of one A100 80GB. max_tokens 16384 is the per-turn completion budget.
+# https://docs.vllm.ai/en/latest/configuration/engine_args.html
+#
+# modality all includes RGB (questions 189-248). Those samples are left
+# unscored unless Perception's lookup exists at the path hardcoded in
+# agent/tools/Perception.py.
+#
+# The four trajectory judges are the panel used on the October runs. They
+# are our addition and stay off the published accuracy. Each is its own
+# scorer. Mistral Large 2512 is judged on Mistral's API; the other three
+# go through OpenRouter. The launch must export OPENROUTER_BASE_URL,
+# EVE_BASE_URL, and EVE_API_KEY.
+#
+# max_samples 8 matches the earlier full runs.
+#
+#   uv run inspect eval --run-config configs/earth_bench_eve_instruct_if.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: if
+    modality: all
+    trajectory_judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
+
+model:
+  model: openai-api/eve/eve-esa/EVE-Instruct
+  base_url: http://127.0.0.1:8000/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: 16384
+  max_retries: 6
+  stream_idle_timeout: 180
+
+eval_config:
+  epochs: 1
+  max_samples: 8
+  fail_on_error: false

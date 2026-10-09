@@ -24,6 +24,10 @@ solvable, unsolvable, and control; a label such as ``Task Set 03`` is
 ``Task_Set_03``). Earth-Bench's regime is a section of its own,
 ``earth_bench/AP`` or ``earth_bench/IF`` (Feng et al., Section 4), and a
 modality split is nested under it (``earth_bench/AP/spectrum/accuracy``).
+OpenEarthAgent's two protocols are the same kind of section,
+``openearthagent/step`` or ``openearthagent/e2e`` (Shabbir et al.,
+Section 4.1; ``task_type`` in the pinned ``evaluate_function``). Task type
+is nested under that (``openearthagent/step/answer/summ``).
 A task's ``published_metrics`` is the only score names copied into that
 summary. The slash matches the section the Forge summary already
 uses for a task; the judge names follow run ``ta8fu0bx``
@@ -34,9 +38,10 @@ Other score names are written as they are stored. A metric whose per-sample
 values are the same on every scorer is one key, ``{benchmark}/{metric}``.
 A metric that differs across scorers is one key per judge,
 ``{benchmark}/{judge}/{metric}``, using the last segment of ``judge_model``.
-OpenEarthAgent's ``answer`` field is the table column: ``summ`` in step mode
-(Table 3) and ``ans`` end to end (Table 4). NaNs are left out of the mean.
-The same split is repeated under each ``summary_groups`` label.
+OpenEarthAgent writes those keys under ``step`` or ``e2e``. Its ``answer``
+field is the table column: ``summ`` in step mode (Table 3) and ``ans`` end
+to end (Table 4). NaNs are left out of the mean. The same split is repeated
+under each ``summary_groups`` label.
 
 The same block, including each class and each judge's counts, is logged once.
 Logging it again appends a history step, which is why a republished run draws
@@ -49,6 +54,8 @@ raw tool trace, and the conversation with a marker at each turn. Its metric
 columns are the scores that benchmark recorded. A run that did not score
 ``tao`` does not get a ``tao`` column. A second
 ``run.log`` is not used for it, because that appends a history step.
+The same call logs ``metric_guide``, an HTML note for this run's regime,
+modality, and judges, and copies that markdown onto ``run.notes``.
 
 https://github.com/eve-esa/lm-evaluation-harness/blob/main/lm_eval/loggers/wandb_logger.py
 https://docs.wandb.ai/models/track/log/log-summary
@@ -103,6 +110,8 @@ TRACE_COLUMNS = (
 # ``step`` is also read as the run's history step, which filters the calls out.
 TRACE_DTYPES = (str, int, str, str, str, str, bool, str)
 _STEP_SCORES = frozenset({"tao", "tio", "tem", "param_acc"})
+# Shabbir et al., arXiv:2602.17665, Tables 3 and 4. Earth-Bench still logs these.
+_OPENEARTHAGENT_OMITTED = _STEP_SCORES | frozenset({"trajectory_accuracy"})
 
 
 def benchmark_name(metadata: dict[str, Any] | None, task: str | None) -> str:
@@ -118,15 +127,25 @@ def benchmark_name(metadata: dict[str, Any] | None, task: str | None) -> str:
 # columns (Feng et al., ICLR 2026, arXiv:2509.23141, Section 4 and Appendix
 # B.2). The workspace section is the paper's label, ``AP`` or ``IF``.
 _REGIME_SECTION = {"ap": "AP", "if": "IF"}
+# OpenEarthAgent reports step-by-step and end-to-end as separate protocols
+# (Shabbir et al., arXiv:2602.17665, Section 4.1). The pinned scorer branches
+# on ``task_type`` ``step`` or ``e2e``. The section uses those names.
+_OPENEARTHAGENT_REGIME = {"step": "step", "e2e": "e2e"}
 
 
 def metric_root(benchmark: str, regime: str | None) -> str:
-    """``{benchmark}/{AP|IF}`` when the run is one of those regimes.
+    """Prefix for one run's summary keys.
 
-    Other regimes stay off the path. OpenEarthAgent's ``step`` and ``e2e``
-    only choose the answer column (``summ`` or ``ans``).
+    Earth-Bench nests its protocol (``earth_bench/AP``, ``earth_bench/IF``).
+    OpenEarthAgent nests its protocol (``openearthagent/step``,
+    ``openearthagent/e2e``). Any other regime stays off the path. The
+    protocol still renames OpenEarthAgent's answer column (``summ`` or ``ans``).
     """
-    label = _REGIME_SECTION.get((regime or "").strip().lower())
+    key = (regime or "").strip().lower()
+    if benchmark == "openearthagent":
+        label = _OPENEARTHAGENT_REGIME.get(key)
+    else:
+        label = _REGIME_SECTION.get(key)
     if not label:
         return benchmark
     return f"{benchmark}/{label}"
@@ -138,6 +157,285 @@ def regime_label(regime: str | None) -> str | None:
     if not text:
         return None
     return _REGIME_SECTION.get(text.lower(), text)
+
+
+def _listed(value: Any) -> str:
+    if isinstance(value, list):
+        parts = [str(item).strip() for item in value if str(item).strip()]
+    elif isinstance(value, str):
+        parts = [part.strip() for part in value.split(",") if part.strip()]
+    else:
+        parts = []
+    return ", ".join(f"`{part}`" for part in parts)
+
+
+def _judge_note(metadata: dict[str, Any], official: str) -> str:
+    """How this run's judges sit next to the official score."""
+    lines = [official]
+    judges = _listed(metadata.get("judges"))
+    if judges:
+        lines.append(
+            f"This run's extra answer judges are {judges}. "
+            "Each judge keeps its own key, separate from the official score."
+        )
+    else:
+        lines.append(
+            "Extra answer judges, when a run sets them, each keep their own key, "
+            "separate from the official score."
+        )
+    trajectory = _listed(metadata.get("trajectory_judges"))
+    if "trajectory_judges" not in metadata:
+        return " ".join(lines)
+    if trajectory:
+        lines.append(
+            f"This run's trajectory judges are {trajectory}. "
+            "They are our addition and stay off the published chart."
+        )
+    else:
+        lines.append("Trajectory judges are optional. When a run sets them, they stay off the published chart.")
+    return " ".join(lines)
+
+
+def _earth_bench_guide(metadata: dict[str, Any]) -> str:
+    regime = str(metadata.get("regime") or "ap").strip().lower()
+    label = _REGIME_SECTION.get(regime, regime.upper() or "AP")
+    modality = str(metadata.get("modality") or "all").strip() or "all"
+    if regime == "ap":
+        this = "This run is **AP** (Auto-Planning): the agent chooses the tools."
+        sibling = "**IF** (Instruction-Following) is the other regime: the question lists the steps. It is a separate run."
+    elif regime == "if":
+        this = "This run is **IF** (Instruction-Following): the question lists the steps."
+        sibling = "**AP** (Auto-Planning) is the other regime: the agent chooses the tools. It is a separate run."
+    else:
+        this = f"This run's regime is **{label}**."
+        sibling = (
+            "**AP** (Auto-Planning) means the agent chooses the tools. "
+            "**IF** (Instruction-Following) means the question lists the steps. They are separate runs."
+        )
+    if modality == "all":
+        modality_line = (
+            "This run includes every modality (`spectrum`, `products`, and `rgb`: "
+            "raw spectra, derived products, and RGB images). "
+            f"Each one is nested under the regime, for example `earth_bench/{label}/spectrum/accuracy`."
+        )
+    else:
+        modality_line = (
+            f"This run's modality is `{modality}`. "
+            "`spectrum`, `products`, and `rgb` are the three input families "
+            "(raw spectra, derived products, and RGB images). "
+            f"Keys for this split sit under `earth_bench/{label}/{modality}/`, "
+            f"for example `earth_bench/{label}/{modality}/accuracy`."
+        )
+    judges = _judge_note(
+        metadata,
+        "The official answer score is exact match. Earth-Bench does not use a judge for it.",
+    )
+    return f"""# Earth-Bench
+
+{this} {sibling} Chart keys sit under `earth_bench/{label}/`.
+
+{modality_line}
+
+Official scores (Feng et al., Appendix B.2):
+
+- `accuracy` — exact match of the extracted answer. This is the headline.
+- `efficiency` — predicted tool calls divided by gold tool calls. The ratio can be above 1.
+- `tao` — share of the gold tool set that appears anywhere in the trace.
+- `tio` — gold tools in order, stopping at the first miss.
+- `tem` — length of the exact prefix of the gold sequence, divided by the gold length.
+- `param_acc` — that same prefix, also requiring the arguments to match.
+
+{judges}
+"""
+
+
+def _openearthagent_guide(metadata: dict[str, Any]) -> str:
+    regime = str(metadata.get("regime") or "e2e").strip().lower()
+    label = "step" if regime == "step" else "e2e"
+    tools = str(metadata.get("tools") or "all").strip() or "all"
+    if regime == "step":
+        this = (
+            "This run is **step** (Table 3): teacher-forced. "
+            "Each gold turn is one sample, tools do not run, and the model writes the next JSON action."
+        )
+        sibling = "**e2e** (Table 4) is the other regime: the agent calls tools. It is a separate run."
+        scores = """Step scores:
+
+- `inst` — the reply parsed as an action.
+- `tool` — the gold tool name.
+- `argn` — the same argument names.
+- `argv` — the same argument values.
+- `summ` — the judge score on `Terminate.ans`. It counts only when both sides called `Terminate` on a task whose last tool is not a generation tool.
+
+The first turn of each task is a thought with an empty action list. Those turns stay out of the denominator.
+
+`avg_summ` is the unweighted mean of this run's answer judges, each judge once. It sits with the other `summ` scores. A run with one judge does not add it."""
+    else:
+        if tools == "cached":
+            tool_line = (
+                " This log was recorded with the removed cache-only setting: "
+                "only tasks the gpkg cache could replay, and the controller was not called."
+            )
+        else:
+            tool_line = (
+                " A cache hit for the five gpkg tools is used. Every miss, and every other tool, "
+                "goes to the live worker."
+            )
+        this = (
+            "This run is **e2e** (Table 4): the agent calls tools, and the final assistant message is the answer."
+            + tool_line
+        )
+        sibling = (
+            "**step** (Table 3) is the other regime: teacher-forced JSON, one gold turn at a time, with no tools. "
+            "It is a separate run."
+        )
+        scores = """End-to-end scores:
+
+- `any_order` — the gold tools are covered as a multiset (counts, any order).
+- `same_order` — that coverage, and the gold names are a subsequence. Extra predicted calls are allowed. Table 4's caption says "exact sequence"; Section 4.1 and the released scorer mean sequence plus frequency.
+- `unique` — the gold tools are covered as a set.
+- `ans` — the judge score on the final answer, for tasks that are not generation tasks.
+- `gen_success` — the last tool is the gold generation tool and that call succeeded.
+- `perception`, `operation`, `logic`, `gis` — pooled category F1. One task can contribute to more than one category.
+- `avg_ans` — unweighted mean of this run's answer judges, each judge once. It sits with the other `ans` scores. A run with one judge does not add it."""
+    if metadata.get("vision") is False:
+        vision_line = "`vision=false` on this run leaves the 533 image tasks unscored."
+    else:
+        vision_line = (
+            "Task type is the next section, `answer` and `generation`: "
+            f"`openearthagent/{label}/answer/` and `openearthagent/{label}/generation/`. "
+            "`summ` is filled on `answer` only. An end-to-end generation task is scored with `gen_success` (Table 4's Gen.)."
+        )
+    judges = _judge_note(
+        metadata,
+        "The official answer judge is the grader role (`gpt-4o-mini` in the paper, temperature 0, at most 150 tokens).",
+    )
+    return f"""# OpenEarthAgent
+
+{this} {sibling} Chart keys sit under `openearthagent/{label}/`.
+
+Logged rates are fractions in [0, 1]. Tables 3 and 4 print those rates times 100.
+
+{scores}
+
+{vision_line}
+
+{judges}
+"""
+
+
+def _geobenchx_guide(metadata: dict[str, Any]) -> str:
+    group = str(metadata.get("group") or "all").strip() or "all"
+    kind = str(metadata.get("kind") or "all").strip() or "all"
+    judges = _judge_note(
+        metadata,
+        "The headline is the panel's match share. The paper's panel is Claude Sonnet 3.5, GPT-4.1, and Gemini 2.5 Pro.",
+    )
+    return f"""# GeoBenchX
+
+`geobenchx/match` is the headline: the unweighted mean of each judge's match share (Krechetova & Kochedykov, Section 5.2). Each judge is its own row (`geobenchx/llm_as_judge/<model>`), with `partial` and `no_match` beside it. `merged/match` averages the indicators on one sample and is a different number.
+
+`length_diff` is the difference in solution length. This run's group is `{group}`. `kind` is solvable, unsolvable, or control; this run's kind filter is `{kind}`. Those classes repeat the block under `geobenchx/<label>/`.
+
+`tao`, `tio`, `tem`, and `param_acc` are our addition. They sit beside the paper's verdicts.
+
+{judges}
+"""
+
+
+def _eo_gym_guide(metadata: dict[str, Any]) -> str:
+    prompt = str(metadata.get("prompt") or "simple").strip() or "simple"
+    toolset = str(metadata.get("toolset") or "skill").strip() or "skill"
+    trajectories = metadata.get("trajectories", 3)
+    if metadata.get("vision") is False:
+        vision_line = "`vision=false` on this run leaves every task unscored, because the questions carry images."
+    else:
+        vision_line = "The questions carry images, so the model under test reads pixels."
+    judges = _judge_note(
+        metadata,
+        "The answer judge is the grader role (`gpt-4.1-mini` in the paper). A failed judge falls back to exact normalised match.",
+    )
+    return f"""# EO-Gym
+
+This run uses the `{prompt}` prompt and the `{toolset}` tool set, with {trajectories} trajectories per task.
+
+- `accuracy` — 1 when a consumed trajectory is correct.
+- `pass@k` — 1 when the first correct trajectory falls inside the first k. Scoring stops at that trajectory.
+- `unbiased_pass@k` — the Chen et al. (2021) estimator over the same trajectories.
+
+`question_type` and `eo_task` repeat the block under `eo_gym/`. {vision_line}
+
+{judges}
+"""
+
+
+def _generic_guide(metadata: dict[str, Any]) -> str:
+    name = benchmark_name(metadata, None)
+    return f"""# {name}
+
+Scores on this run are that benchmark's own published metrics. An extra judge keeps its own key, separate from that score.
+"""
+
+
+def metric_guide(metadata: dict[str, Any] | None) -> str:
+    """Markdown for the run page: regime, modality, metric hierarchy, and judges.
+
+    Shabbir et al., arXiv:2602.17665, Tables 3 and 4 (OpenEarthAgent).
+    Feng et al., arXiv:2509.23141, Section 4 and Appendix B.2 (Earth-Bench AP / IF).
+    Krechetova & Kochedykov, arXiv:2503.18129, Sections 5.2 and 6.1 (GeoBenchX).
+    EO-Gym, arXiv:2605.01250, Section 5 (pass@k). Chen et al., arXiv:2107.03374
+    (unbiased pass@k).
+    """
+    document = metadata if isinstance(metadata, dict) else {}
+    writers = {
+        "earth_bench": _earth_bench_guide,
+        "openearthagent": _openearthagent_guide,
+        "geobenchx": _geobenchx_guide,
+        "eo_gym": _eo_gym_guide,
+    }
+    text = writers.get(benchmark_name(document, None), _generic_guide)(document)
+    return text.strip() + "\n"
+
+
+def guide_html(markdown: str) -> str:
+    """A small HTML page for ``wandb.Html``. The run notes keep the markdown."""
+    import html
+
+    parts = ["<article>"]
+    in_list = False
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            parts.append("</ul>")
+            in_list = False
+
+    def inline(text: str) -> str:
+        escaped = html.escape(text)
+        escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+        escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
+        return escaped
+
+    for line in markdown.splitlines():
+        if line.startswith("# "):
+            close_list()
+            parts.append(f"<h1>{inline(line[2:])}</h1>")
+        elif line.startswith("## "):
+            close_list()
+            parts.append(f"<h2>{inline(line[3:])}</h2>")
+        elif line.startswith("- "):
+            if not in_list:
+                parts.append("<ul>")
+                in_list = True
+            parts.append(f"<li>{inline(line[2:])}</li>")
+        elif not line.strip():
+            close_list()
+        else:
+            close_list()
+            parts.append(f"<p>{inline(line)}</p>")
+    close_list()
+    parts.append("</article>")
+    return "\n".join(parts)
 
 
 def published_names(metadata: dict[str, Any] | None) -> frozenset[str] | None:
@@ -492,10 +790,66 @@ def _native_value_rows(
             if slug:
                 columns[f"{slug}/{published}"] = sequence
     blank = len(rows_in)
+    _answer_panel_column(columns, blank)
     return [
         {key: values[index] for key, values in columns.items()}
         for index in range(blank)
     ]
+
+
+def _answer_panel_column(
+    columns: dict[str, list[float | None]], n_rows: int
+) -> None:
+    """Per-sample mean of the answer judges. One judge leaves the paper column."""
+    judge_keys = [
+        key
+        for key in columns
+        if "/" in key and key.rsplit("/", 1)[-1] in {"ans", "summ"}
+    ]
+    if len(judge_keys) < 2:
+        return
+    leaf = judge_keys[0].rsplit("/", 1)[-1]
+    if any(key.rsplit("/", 1)[-1] != leaf for key in judge_keys):
+        return
+    averaged: list[float | None] = []
+    for index in range(n_rows):
+        scored = [
+            columns[key][index]
+            for key in judge_keys
+            if columns[key][index] is not None
+        ]
+        averaged.append(sum(scored) / len(scored) if scored else None)
+    columns[f"avg_{leaf}"] = averaged
+
+
+def _answer_panel(summary: dict[str, float], prefix: str) -> tuple[str, float] | None:
+    """Unweighted mean of each judge's answer score under ``prefix``.
+
+    Shabbir et al., arXiv:2602.17665, Tables 3 and 4 use one grader. This is
+    the same construction as GeoBenchX Section 5.2 (each judge once). The key
+    is ``avg_ans`` or ``avg_summ``, so it shows with the other answer scores.
+    A single judge leaves that column as it is.
+    """
+    values: list[float] = []
+    leaves: set[str] = set()
+    head = f"{prefix}/"
+    for key, value in summary.items():
+        if not key.startswith(head):
+            continue
+        rest = key[len(head) :]
+        slug, separator, leaf = rest.partition("/")
+        if (
+            separator
+            and slug
+            and slug != "avg"
+            and "/" not in leaf
+            and leaf in {"ans", "summ"}
+        ):
+            values.append(value)
+            leaves.add(leaf)
+    if len(values) < 2 or len(leaves) != 1:
+        return None
+    return f"{prefix}/avg_{next(iter(leaves))}", sum(values) / len(values)
 
 
 def native_metrics(
@@ -530,6 +884,12 @@ def native_metrics(
     for key, value in _category_f1(scores, benchmark, judges).items():
         if only is None or key.rsplit("/", 1)[-1] in only:
             out[key] = value
+    # Mean of the judge means, not the mean of the per-sample average cells.
+    # A judge that skipped samples still counts once.
+    averaged = _answer_panel(out, benchmark)
+    if averaged is not None:
+        key, value = averaged
+        out[key] = value
     return out
 
 
@@ -763,11 +1123,17 @@ def results_rows(scores: list[Any], benchmark: str) -> list[dict[str, Any]]:
         mean = _metric(metrics, "mean")
         if mean is None:
             continue
+        name = str(getattr(score, "name", ""))
+        if benchmark == "openearthagent" and (
+            name in _OPENEARTHAGENT_OMITTED
+            or name.rsplit("/", 1)[-1] in _OPENEARTHAGENT_OMITTED
+        ):
+            continue
         scored = getattr(score, "scored_samples", None)
         rows.append(
             {
                 "task": benchmark,
-                "metric": str(getattr(score, "name", "")),
+                "metric": name,
                 "value": mean,
                 "stderr": _metric(metrics, "stderr"),
                 "n": int(scored) if isinstance(scored, int) else 0,
@@ -1251,9 +1617,15 @@ _METRIC_ORDER = (
 
 def _metric_sort(keys: set[str]) -> list[str]:
     preferred = [key for key in _METRIC_ORDER if key in keys]
-    bare = sorted(key for key in keys if key not in _METRIC_ORDER and "/" not in key)
+    bare = sorted(
+        key
+        for key in keys
+        if key not in _METRIC_ORDER and "/" not in key and key not in {"avg_ans", "avg_summ"}
+    )
     judged = sorted(key for key in keys if "/" in key and key not in _METRIC_ORDER)
-    return preferred + bare + judged
+    ordered = preferred + bare + judged
+    ordered.extend(key for key in ("avg_summ", "avg_ans") if key in keys)
+    return ordered
 
 
 def _charted_cells(sample: Any) -> dict[str, float]:
@@ -1287,7 +1659,10 @@ def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
     judge. It does not carry Earth-Bench or GeoBenchX columns.
     """
     rows_in = list(samples or [])
-    native = _native_value_rows(rows_in, _regime_of(rows_in))
+    regime = _regime_of(rows_in)
+    # Step and end-to-end are OpenEarthAgent. Their tables keep Tables 3 and 4.
+    paper_only = regime in {"step", "e2e"}
+    native = _native_value_rows(rows_in, regime)
     charted = [_charted_cells(sample) for sample in rows_in]
     metric_keys = _metric_sort(
         {
@@ -1295,6 +1670,13 @@ def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
             for cells in (*charted, *native)
             for key, value in cells.items()
             if value is not None
+            and not (
+                paper_only
+                and (
+                    key in _OPENEARTHAGENT_OMITTED
+                    or key.rsplit("/", 1)[-1] in _OPENEARTHAGENT_OMITTED
+                )
+            )
             and key != "trajectory_accuracy"
             and not key.endswith("/trajectory_accuracy")
         }
@@ -1315,7 +1697,9 @@ def sample_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
                 **{key: metrics.get(key) for key in metric_keys},
                 "n_tool_calls": len(names),
                 "tool_trace": " -> ".join(names),
-                **_sample_judge_fields(sample),
+                # Trajectory judges become ``{model}/match`` columns. Tables 3
+                # and 4 do not include that judge.
+                **({} if paper_only else _sample_judge_fields(sample)),
             }
         )
     return rows
@@ -1399,8 +1783,10 @@ def comparison_summary(
 
     Auto-Planning and Instruction-Following sit under ``{benchmark}/AP`` and
     ``{benchmark}/IF``. A modality split is another section under that,
-    ``earth_bench/AP/spectrum/accuracy``. ``only`` drops score names the task
-    did not declare (another answer key, a trajectory judge).
+    ``earth_bench/AP/spectrum/accuracy``. OpenEarthAgent's step and end-to-end
+    protocols sit under ``openearthagent/step`` and ``openearthagent/e2e``.
+    ``only`` drops score names the task did not declare (another answer key,
+    a trajectory judge).
     """
     root = metric_root(benchmark, regime)
     summary = summary_metrics(scores, root)
@@ -1421,11 +1807,19 @@ def comparison_summary(
         grouped_metrics(samples, root, list(groups or []), regime=regime, only=only)
     )
     summary.update(dashboard_aliases(summary, root))
+    if benchmark == "openearthagent":
+        # Tables 3 and 4 do not include Earth-Bench step scores or a trajectory judge.
+        summary = {
+            key: value
+            for key, value in summary.items()
+            if key.rsplit("/", 1)[-1] not in _OPENEARTHAGENT_OMITTED
+        }
     return summary
 
 
 _SECRET_KEY = re.compile(
-    r"(api[_-]?key|token|secret|password|authorization)", re.IGNORECASE
+    r"(api[_-]?key|(?:^|[_-])token(?:$|[_-])|secret|password|authorization)",
+    re.IGNORECASE,
 )
 
 
@@ -1484,6 +1878,7 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
     run.name = model_run_name(getattr(spec, "model", None), benchmark)
     label = regime_label(regime)
     modality = metadata.get("modality")
+    guide = metric_guide(metadata)
     try:
         recorded: dict[str, Any] = {"run_config": run_config_yaml(log)}
         if label is not None:
@@ -1491,6 +1886,7 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
         if isinstance(modality, str) and modality.strip():
             recorded["modality"] = modality.strip()
         run.config.update(recorded, allow_val_change=True)
+        run.notes = guide
     except Exception:
         logger.exception("W&B run config was not recorded")
     _drop_stale_summary(run, benchmark, set(summary))
@@ -1501,9 +1897,12 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
     rows = sample_rows(samples)
     traces = example_trace_rows(samples)
     trace_columns = trace_table_columns(traces)
+    import wandb
+
     run.log(
         {
             **summary,
+            "metric_guide": wandb.Html(guide_html(guide), inject=False),
             SAMPLES_KEY: _as_table(sample_table_columns(rows), rows),
             TRACES_KEY: _as_table(
                 trace_columns,

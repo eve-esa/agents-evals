@@ -1,0 +1,51 @@
+# Earth-Bench full Instruction-Following run: Mistral Small 3.2 24B Instruct.
+#
+# Feng et al., Earth-Agent (ICLR 2026), Table 7. Their runners use
+# temperature 0.1. Instruction-following is a separate regime from
+# auto-planning and is reported on its own.
+#
+# Mistral's API id for this checkpoint, mistral-small-2506, was retired
+# on 31 Jul 2026 (https://docs.mistral.ai/models). The live /v1/models
+# list on https://api.mistral.ai/v1 does not include it. OpenRouter still
+# lists mistralai/mistral-small-3.2-24b-instruct: 256k context, a 16384
+# completion cap, and tool calling
+# (https://openrouter.ai/mistralai/mistral-small-3.2-24b-instruct).
+# Listed price there is $0.075 / $0.20 per 1M input/output tokens.
+# A larger max_tokens is rejected.
+#
+# modality all includes RGB (questions 189-248). Those samples are left
+# unscored unless Perception's lookup exists at the path hardcoded in
+# agent/tools/Perception.py.
+#
+# The four trajectory judges are the panel used on the October runs. They
+# are our addition and stay off the published accuracy. Each is its own
+# scorer. Mistral Large 2512 is judged on Mistral's API; the other three
+# go through OpenRouter. The launch must export OPENROUTER_BASE_URL.
+#
+# max_samples 8 matches the earlier full runs.
+#
+#   uv run inspect eval --run-config configs/earth_bench_mistral_small_3_2_if.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: if
+    modality: all
+    trajectory_judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
+
+model:
+  model: openai-api/openrouter/mistralai/mistral-small-3.2-24b-instruct
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: 16384
+  max_retries: 6
+  stream_idle_timeout: 180
+
+eval_config:
+  epochs: 1
+  max_samples: 8
+  fail_on_error: false

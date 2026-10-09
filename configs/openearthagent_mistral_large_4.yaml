@@ -1,0 +1,49 @@
+# OpenEarthAgent end-to-end: Mistral Large 4 on Mistral's API.
+#
+# Shabbir et al., arXiv:2602.17665, Table 4. A cache hit for the five gpkg
+# tools is used; every miss goes to the live worker. The host needs Conda
+# environments tool-server-e1 and tool-server-e2, the weights that YAML
+# names, OPENEARTHAGENT_SERPER_API_KEY, and OPENEARTHAGENT_GEE_KEY.
+#
+# Solver: https://docs.mistral.ai/models/mistral-large-4-0 (6 Oct 2026,
+# multimodal, function calling). The live /v1/models listing reports
+# mistral-large-4-0 with context 524288, so vision stays on and image tasks
+# are scored. Temperature 0.4 and max_tokens 256 are the upstream OpenAI
+# driver's settings (task.py).
+#
+# The official answer judge stays the paper's grader, gpt-4o-mini, on
+# OpenRouter. The October panel is extra answer judges. Those rows are
+# separate from the official score.
+#
+#   uv run inspect eval --run-config configs/openearthagent_mistral_large_4.yaml --display plain
+
+task:
+  task: agentic_evals/openearthagent
+  args:
+    regime: e2e
+    vision: true
+    judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
+
+model:
+  model: openai-api/mistral/mistral-large-4-0
+  base_url: https://api.mistral.ai/v1
+  args:
+    strict_tools: false
+
+model_roles:
+  grader:
+    model: openai-api/openrouter/openai/gpt-4o-mini
+    base_url: https://openrouter.ai/api/v1
+
+generate_config:
+  temperature: 0.4
+  # https://docs.mistral.ai/capabilities/reasoning — "none" keeps content a string.
+  reasoning_effort: none
+  max_tokens: 256
+  max_retries: 6
+  stream_idle_timeout: 180
+
+eval_config:
+  epochs: 1
+  max_samples: 8
+  fail_on_error: false

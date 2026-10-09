@@ -27,3 +27,12 @@ data_patterns = [
 [geobenchx]
 rev = "0edf6109ea5dca3e70fdfe081d39c9ccd0f832fb"
 drive_file_id = "10hLDCTMnaMAXyUCxFjUt4iK7tX9XyXZu"
+
+[openearthagent]
+# Tool server code is not vendored (the GitHub repo has no license). setup
+# clones this revision into data/openearthagent/upstream. The test split is
+# the Hugging Face dataset, Apache-2.0.
+rev = "9229c53676a22a9232e49ba1d06cad41ca629f18"
+repo_id = "MBZUAI/OpenEarthAgent"
+repo_type = "dataset"
+revision = "f4d4e181ba2b3d2b2782c5799e8964906390e0f7"

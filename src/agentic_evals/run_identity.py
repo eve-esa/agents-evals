@@ -1,6 +1,6 @@
 """Capture what the model endpoint says it is, at run time.
 
-AGENTS.md: the system under test is deployed on demand, so its identity is read
+The endpoint is deployed on demand, so its identity is read
 from the endpoint when the run starts, never assumed from configuration. For
 OpenAI-compatible endpoints this is ``GET {base_url}/models``. If the endpoint
 does not list the requested model, or lists no version/owner information, the

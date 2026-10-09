@@ -69,6 +69,69 @@ def test_mistral_json_array_envelope_becomes_tool_calls():
     assert calls[0]["args"] == {"dir_path": "d"}
 
 
+def test_empty_tool_name_is_dropped():
+    message = AIMessage(
+        content="",
+        tool_calls=[{"name": "", "args": {}, "id": "call_empty", "type": "tool_call"}],
+        additional_kwargs={
+            "tool_calls": [
+                {"id": "call_empty", "type": "function", "function": {"name": "", "arguments": "{}"}}
+            ]
+        },
+    )
+    normalized = normalize_mistral_message(message)
+    assert normalized.tool_calls == []
+    assert "tool_calls" not in normalized.additional_kwargs
+
+
+def test_empty_tool_name_is_dropped_beside_a_real_call():
+    message = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "", "args": {}, "id": "call_empty", "type": "tool_call"},
+            {
+                "name": "GetAreaBoundary",
+                "args": {"area": "Banff"},
+                "id": "call_ok",
+                "type": "tool_call",
+            },
+        ],
+    )
+    normalized = normalize_mistral_message(message)
+    assert [call["name"] for call in normalized.tool_calls] == ["GetAreaBoundary"]
+    assert normalized.tool_calls[0]["id"] == "call_ok"
+
+
+def test_empty_structured_call_falls_through_to_the_text_envelope():
+    text = '[TOOL_CALLS]GetAreaBoundary[ARGS]{"area": "Banff"}'
+    message = AIMessage(
+        content=text,
+        tool_calls=[{"name": "", "args": {}, "id": "call_empty", "type": "tool_call"}],
+    )
+    normalized = normalize_mistral_message(message)
+    assert normalized.content == ""
+    assert normalized.tool_calls[0]["name"] == "GetAreaBoundary"
+    assert normalized.tool_calls[0]["args"] == {"area": "Banff"}
+
+
+def test_invalid_call_with_an_empty_name_is_not_replayed():
+    message = AIMessage(
+        content="",
+        invalid_tool_calls=[
+            {
+                "type": "invalid_tool_call",
+                "id": "call_blank",
+                "name": "",
+                "args": "{}",
+                "error": "name",
+            }
+        ],
+    )
+    normalized = normalize_mistral_message(message)
+    assert normalized.tool_calls == []
+    assert normalized.invalid_tool_calls == []
+
+
 def test_ordinary_text_is_left_unchanged():
     message = AIMessage(content="The answer is 4.")
     assert normalize_mistral_message(message) is message

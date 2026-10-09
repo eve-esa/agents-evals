@@ -1,0 +1,17 @@
+The file `data/test.json` is from the Hugging Face dataset
+MBZUAI/OpenEarthAgent (revision f4d4e181ba2b3d2b2782c5799e8964906390e0f7)
+and is licensed under the Apache License, Version 2.0. The dataset card
+states that license. The full text is at
+https://www.apache.org/licenses/LICENSE-2.0
+
+`prompts/rs_agent_prompt.txt` and `prompts/answer_judge.txt` are the
+evaluation protocol text from
+https://github.com/mbzuai-oryx/OpenEarthAgent at revision
+9229c53676a22a9232e49ba1d06cad41ca629f18. That repository has no LICENSE
+file. They are included so the published step protocol and judge prompt
+can be run. Copying them for this harness is authorized. See PORTING.md.
+
+Tool-server implementation code from that repository is not committed in
+this package. Cloning it for a run is authorized.
+`scripts/setup_benchmark.py openearthagent` clones the pinned revision
+into `data/openearthagent/upstream`, which is gitignored.
