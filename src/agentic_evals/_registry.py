@@ -28,5 +28,10 @@ from agentic_evals.tasks.geobenchx.scorers import (
     geobenchx_steps,
 )
 from agentic_evals.tasks.geobenchx.task import geobenchx
+from agentic_evals.tasks.openearthagent.scorers import (
+    openearthagent_scorer,
+    openearthagent_step,
+)
+from agentic_evals.tasks.openearthagent.task import openearthagent
 
 _install_openai_compat()

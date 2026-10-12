@@ -9,15 +9,20 @@ the name and calls that module.
     uv sync --extra geobenchx
     uv run python scripts/setup_benchmark.py geobenchx
     uv run python scripts/setup_benchmark.py eo-gym
+    uv run python scripts/setup_benchmark.py openearthagent
+    uv run python scripts/setup_benchmark.py openearthagent --tasks 0-10
 
 Earth-Bench without ``--modality`` or ``--questions`` downloads every task
 raster (16.6 GB) into ``data/earth_bench``. GeoBenchX downloads the Google
 Drive archive into ``data/geobenchx``. EO-Gym downloads the image archives and
 lookup tables into ``data/eo_gym`` and installs the copied tool server into
-``data/venvs/eo-gym``. The server is not started.
+``data/venvs/eo-gym``. The server is not started. OpenEarthAgent downloads
+the test images and the gpkg cache into ``data/openearthagent`` and clones
+the tool server there. The server is not started.
 
 ``--skip-data`` downloads nothing. For EO-Gym it still installs the server
-virtualenv. ``generate_contours_display`` is the one GeoBenchX tool that still
+virtualenv. For OpenEarthAgent it still clones the pinned tool server.
+``generate_contours_display`` is the one GeoBenchX tool that still
 needs a system GDAL.
 """
 
@@ -33,8 +38,9 @@ from agentic_evals.tasks.earth_bench.setup import MODALITY_QUESTIONS
 from agentic_evals.tasks.earth_bench.setup import install as install_earth_bench
 from agentic_evals.tasks.eo_gym.setup import install as install_eo_gym
 from agentic_evals.tasks.geobenchx.setup import install as install_geobenchx
+from agentic_evals.tasks.openearthagent.setup import install as install_openearthagent
 
-BENCHMARKS = ("earth-bench", "eo-gym", "geobenchx")
+BENCHMARKS = ("earth-bench", "eo-gym", "geobenchx", "openearthagent")
 # The Earth-Bench tools were ported from the Earth-Agent repo. Accept the old name.
 ALIASES = {"earth-agent": "earth-bench"}
 
@@ -45,7 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-data",
         action="store_true",
-        help="Do not download rasters, imagery, lookup tables, or the Drive archive.",
+        help="Do not download rasters, imagery, lookup tables, the Drive archive, or OpenEarthAgent images.",
+    )
+    parser.add_argument(
+        "--tasks",
+        help="OpenEarthAgent only. Dataset idx values whose images to download, e.g. '0-10,42'.",
     )
     parser.add_argument(
         "--modality",
@@ -65,15 +75,19 @@ def main(argv: list[str] | None = None) -> None:
     benchmark = canonical_benchmark(args.benchmark)
     if benchmark != "earth-bench" and (args.modality or args.questions):
         sys.exit("--modality and --questions apply only to earth-bench.")
-    if args.skip_data and (args.modality or args.questions):
-        sys.exit("--skip-data downloads no rasters. Drop it to use --modality or --questions.")
+    if getattr(args, "tasks", None) and benchmark != "openearthagent":
+        sys.exit("--tasks applies only to openearthagent.")
+    if args.skip_data and (args.modality or args.questions or getattr(args, "tasks", None)):
+        sys.exit("--skip-data downloads nothing. Drop it to use --modality, --questions, or --tasks.")
     print(f"Installing {benchmark} only.", flush=True)
     if benchmark == "earth-bench":
         install_earth_bench(args)
     elif benchmark == "eo-gym":
         install_eo_gym(args)
-    else:
+    elif benchmark == "geobenchx":
         install_geobenchx(args)
+    else:
+        install_openearthagent(args)
 
 
 if __name__ == "__main__":

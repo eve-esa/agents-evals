@@ -4,7 +4,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Downloaded rasters, the GeoBenchX archive, EO-Gym imagery, and the EO-Gym server venv.
+# Downloaded rasters, the GeoBenchX archive, EO-Gym imagery, the EO-Gym server
+# venv, and the OpenEarthAgent image/gpkg download plus its cloned tool server.
 # Anchored to the repo root so tasks/<benchmark>/data/ (committed JSON) stays tracked.
 /data/
 
@@ -16,3 +17,4 @@ runs/
 wandb/
 
 .env
+

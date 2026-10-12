@@ -1,0 +1,63 @@
+# Earth-Bench full Auto-Planning run: Mistral Large 4 on Mistral's API.
+#
+# Feng et al., Earth-Agent (ICLR 2026), Table 7. Their runners use
+# temperature 0.1. Large 4 is called on https://api.mistral.ai/v1.
+#
+# Model card: https://docs.mistral.ai/models/mistral-large-4-0 (6 Oct 2026,
+# public preview). The live /v1/models listing on that host reports
+# mistral-large-4-0 with max context 524288. mistral-large-latest on the
+# same listing is still the 262144-token checkpoint, so this file pins the
+# versioned id. Function calling is on the model card. Listed price there
+# is $0.68 / $2.09 per 1M input/output tokens.
+#
+# max_tokens -1 records that this run does not impose an output cap
+# (agentic_evals.max_tokens). The tool schemas are about 28k tokens; the
+# 524288 window has room for the reply.
+#
+# reasoning_effort none omits the thinking chunk. With it unset, Large 4
+# returns message.content as a list of chunks and Inspect's stream parser
+# rejects that (StreamTextEvent.text must be a string). Mistral's chat
+# completions parameter is reasoning_effort; "none" keeps content a string.
+# https://docs.mistral.ai/capabilities/reasoning
+#
+# modality all includes RGB (questions 189-248). Those samples are left
+# unscored unless Perception's lookup exists at the path hardcoded in
+# agent/tools/Perception.py.
+#
+# The four trajectory judges are the panel used on the October runs. They
+# are our addition and stay off the published accuracy. Each is its own
+# scorer. Mistral Large 2512 is judged on Mistral's API; the other three
+# go through OpenRouter. The launch must export OPENROUTER_BASE_URL.
+#
+# max_samples 8 matches the earlier full runs. This pod has 4 CPUs.
+#
+#   uv run inspect eval --run-config configs/earth_bench_mistral_large_4.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: all
+    trajectory_judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
+
+model:
+  model: openai-api/mistral/mistral-large-4-0
+  base_url: https://api.mistral.ai/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: -1
+  max_retries: 6
+  stream_idle_timeout: 180
+  # Large 4 thinks by default and streams content as a list of thinking
+  # chunks, which Inspect's stream parser rejects. "none" returns a plain
+  # string and omits the thinking chunk.
+  # https://docs.mistral.ai/capabilities/reasoning
+  reasoning_effort: none
+
+eval_config:
+  epochs: 1
+  max_samples: 8
+  fail_on_error: false

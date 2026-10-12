@@ -180,22 +180,47 @@ def _args_dict(args: Any) -> dict[str, Any] | None:
     return None
 
 
+def _with_usable_name(call: dict[str, Any]) -> dict[str, Any] | None:
+    """A copy with the name stripped, or ``None`` when the name is not a tool name.
+
+    LangChain stores a missing function name as ``""``
+    (``parse_tool_call``). LangGraph then answers
+    ``Error:  is not a valid tool``, and the next request replays that call.
+    OpenRouter rejects the replay with HTTP 400,
+    ``tool_calls[0].function.name must be a non-empty string``.
+    ChatOpenAI also sends ``invalid_tool_calls``
+    (``_convert_message_to_dict``), so a blank name has to be removed from
+    both lists.
+    """
+    name = str(call.get("name") or "").strip()
+    if not _TOOL_NAME.fullmatch(name):
+        return None
+    if name == call.get("name"):
+        return call
+    return {**call, "name": name}
+
+
 def normalize_mistral_message(message: AIMessage) -> AIMessage:
     """Strip illegal whitespace from tool names, and parse a bare Mistral envelope.
 
     A structured call whose name is ``reject_task`` plus a newline is what Venice
-    and DeepInfra answer with HTTP 400. When the envelope arrives as assistant
-    text and ``tool_calls`` is empty, the agent would otherwise end the turn.
+    and DeepInfra answer with HTTP 400. A call whose name is empty is dropped:
+    replaying it is also HTTP 400, from OpenRouter, because the function name
+    must be a non-empty string. When no usable call remains, a
+    ``[TOOL_CALLS]`` envelope in the assistant text is still parsed. When that
+    envelope arrives as assistant text and ``tool_calls`` is empty, the agent
+    would otherwise end the turn.
     """
     calls: list[dict[str, Any]] = []
     changed = False
     for call in message.tool_calls or []:
-        name = str(call.get("name") or "")
-        stripped = name.strip()
-        if stripped != name and _TOOL_NAME.fullmatch(stripped):
-            call = {**call, "name": stripped}
+        usable = _with_usable_name(call)
+        if usable is None:
             changed = True
-        calls.append(call)
+            continue
+        if usable is not call:
+            changed = True
+        calls.append(usable)
 
     invalid = list(message.invalid_tool_calls or [])
     kept_invalid: list[dict[str, Any]] = []
@@ -205,6 +230,9 @@ def normalize_mistral_message(message: AIMessage) -> AIMessage:
         already = any(existing.get("id") == call.get("id") for existing in calls)
         if _TOOL_NAME.fullmatch(name) and args is not None and not already:
             calls.append(_tool_call(name, args, len(calls), call_id=call.get("id") or None))
+            changed = True
+            continue
+        if not _TOOL_NAME.fullmatch(name):
             changed = True
             continue
         kept_invalid.append(call)
@@ -220,11 +248,17 @@ def normalize_mistral_message(message: AIMessage) -> AIMessage:
 
     if not changed:
         return message
+    extra = dict(message.additional_kwargs)
+    # An empty tool_calls list is falsy, so ChatOpenAI would fall through to
+    # the raw additional_kwargs copy and send the blank name again.
+    extra.pop("tool_calls", None)
+    extra.pop("function_call", None)
     return message.model_copy(
         update={
             "content": content,
             "tool_calls": calls,
             "invalid_tool_calls": kept_invalid,
+            "additional_kwargs": extra,
         }
     )
 

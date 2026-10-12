@@ -1,6 +1,6 @@
 """Reproduce upstream's published Earth-Bench scores from their published predictions.
 
-This is the correctness oracle required by AGENTS.md: our metric code, fed the
+Our metric code, fed the
 13 models x 2 regimes of published trajectories, must reproduce every per-task
 score in ``step_by_step_evaluation_results.json`` and
 ``end_to_end_evaluation_results.json``. The published files cover 59 RGB tasks

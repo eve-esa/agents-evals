@@ -1,0 +1,39 @@
+# One OpenEarthAgent task that calls AddIndexLayer.
+#
+# Task 3 has no image. Gold tools are GetAreaBoundary, AddIndexLayer,
+# AddIndexLayer, ComputeIndexChange. A matching column and a successful
+# raster copy return the stored class percentages. A failed copy is a miss
+# and calls the Earth Engine worker, so this run needs the tool server.
+# Same solver settings as configs/openearthagent_mistral_large_4.yaml.
+# No extra answer judges.
+#
+#   uv run inspect eval --run-config configs/openearthagent_mistral_large_4_index_smoke.yaml --display plain
+
+task:
+  task: agentic_evals/openearthagent
+  args:
+    regime: e2e
+    vision: true
+    task_id: "3"
+
+model:
+  model: openai-api/mistral/mistral-large-4-0
+  base_url: https://api.mistral.ai/v1
+  args:
+    strict_tools: false
+
+model_roles:
+  grader:
+    model: openai-api/openrouter/openai/gpt-4o-mini
+    base_url: https://openrouter.ai/api/v1
+
+generate_config:
+  temperature: 0.4
+  reasoning_effort: none
+  max_tokens: 256
+  max_retries: 6
+  stream_idle_timeout: 180
+
+eval_config:
+  epochs: 1
+  fail_on_error: false
