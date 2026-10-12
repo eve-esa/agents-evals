@@ -10,7 +10,9 @@ Two regimes, reported separately:
   not already up is started from the cloned tool server (Conda
   ``tool-server-e1`` / ``tool-server-e2``) and stopped when the eval
   process exits. ``OPENEARTHAGENT_CONTROLLER_URL`` defaults to
-  ``http://127.0.0.1:20001``. ``max_rounds`` 15 is the model-turn cap.
+  ``http://127.0.0.1:20001``. ``max_iterations`` 15 is the model-turn cap
+  (upstream ``--max_rounds``). Step mode records the same number and still
+  generates once per gold turn.
   The five gpkg tools return a cache hit; every miss is sent to the
   live worker.
 
@@ -61,10 +63,11 @@ from agentic_evals.tasks.openearthagent.tools.server import ensure_controller
 from agentic_evals.tooling import publish_mcp_servers
 
 # OpenAIModels defaults to 0.4. config.yaml generation_config.max_length is 256
-# new tokens on that driver. eval_e2e.sh sets max_rounds 15.
+# new tokens on that driver. eval_e2e.sh and eval_step.sh both pass
+# --max_rounds 15. batch_inference stops there. step_inference does not read it.
 DEFAULT_TEMPERATURE = 0.4
 DEFAULT_MAX_TOKENS = 256
-DEFAULT_MAX_ROUNDS = 15
+DEFAULT_MAX_ITERATIONS = 15
 
 
 def _revision() -> dict[str, str]:
@@ -119,7 +122,7 @@ def openearthagent(
     category: Category = "all",
     task_id: str | None = None,
     vision: bool = True,
-    max_rounds: int = DEFAULT_MAX_ROUNDS,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     judges: str | list[str] = "",
     controller: str = "",
@@ -133,7 +136,10 @@ def openearthagent(
             (perception, operation, logic, gis), or "all".
         task_id: Restrict to one dataset ``idx``.
         vision: When false, tasks that carry an image are not applicable.
-        max_rounds: End-to-end model-turn cap (upstream ``max_rounds``, 15).
+        max_iterations: End-to-end model-turn cap (upstream ``--max_rounds``, 15
+            in both ``eval_e2e.sh`` and ``eval_step.sh``). Step mode records
+            the same value and still generates once per gold turn. A YAML run
+            config overrides it with ``task.args.max_iterations``.
         max_tokens: Per-turn generation cap (upstream OpenAI driver, 256).
         judges: Extra answer judges, comma-separated. The grader role is
             always one judge, separate from these.
@@ -143,6 +149,8 @@ def openearthagent(
     """
     if regime not in ("step", "e2e"):
         raise ValueError("regime must be 'step' or 'e2e'")
+    if max_iterations < 1:
+        raise ValueError("max_iterations must be at least 1")
     dataset = openearthagent_dataset(
         regime,
         task_id=task_id,
@@ -157,7 +165,9 @@ def openearthagent(
     if regime == "e2e":
         setup.append(require_tool_service(url))
         setup.append(publish_mcp_servers(sample_servers_factory(url)))
-        agent = solver or langgraph_react(max_model_calls=max_rounds, recursion_limit=4 * max_rounds + 10)
+        agent = solver or langgraph_react(
+            max_model_calls=max_iterations, recursion_limit=4 * max_iterations + 10
+        )
         scorers = [
             openearthagent_scorer(),
             *extra_answer_judges(judges),
@@ -181,7 +191,7 @@ def openearthagent(
             "category": category,
             "task_id": task_id,
             "vision": vision,
-            "max_rounds": max_rounds,
+            "max_iterations": max_iterations,
             "max_tokens": max_tokens,
             "temperature": DEFAULT_TEMPERATURE,
             "judges": judges,

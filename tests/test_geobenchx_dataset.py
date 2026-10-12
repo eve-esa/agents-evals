@@ -86,7 +86,7 @@ def test_task_records_the_pinned_revision():
 
     built = geobenchx(group="heatmaps", kind="unsolvable")
     assert str(built.metadata["geobenchx_rev"]).startswith("0edf6109")
-    assert built.metadata["recursion_limit"] == 25
+    assert built.metadata["max_iterations"] == 25
     assert built.config.temperature == 0
     assert all(sample.metadata["kind"] == "unsolvable" for sample in built.dataset)
     assert all("Heatmaps, Contour Lines" in sample.metadata["labels"] for sample in built.dataset)

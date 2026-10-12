@@ -17,8 +17,10 @@ several tools take a dict (categorical filters) or a free-form list, which
 OpenAI's strict mode rejects.
 
 The agent is our LangGraph ReAct agent. Upstream's ``execute_task`` uses
-temperature 0 and ``recursion_limit=25`` (graph supersteps; their paper calls
-the same parameter "25 iterations"). The system prompt is their
+temperature 0 and ``max_steps=25``, passed as LangGraph's ``recursion_limit``
+(graph supersteps; their paper calls the same parameter "25 iterations").
+Override that budget with ``-T max_iterations=`` or ``task.args.max_iterations``.
+The system prompt is their
 ``SYSTEM_PROMPT + RULES_PROMPT``, including today's date. Agent generates use
 the same idle timeout and retry cap as the match judge
 (``GenerateConfig.stream_idle_timeout``): silence expires an attempt, a stream
@@ -71,10 +73,6 @@ from agentic_evals.tasks.geobenchx.scorers import (
 from agentic_evals.tasks.geobenchx.tools import ported_code_sha256, sample_servers
 from agentic_evals.tooling import publish_mcp_servers
 
-# geobenchx/agent.py execute_task default. This is LangGraph's superstep limit.
-RECURSION_LIMIT = 25
-
-
 def _revision() -> str:
     lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
     return lock["geobenchx"]["rev"]
@@ -117,6 +115,7 @@ def geobenchx(
     trajectory_judges: str | list[str] = "",
     openrouter_ignore: str | list[str] = "",
     openrouter_only: str | list[str] = "",
+    max_iterations: int = 25,
     solver: Solver | Agent | None = None,
 ) -> Task:
     """GeoBenchX tasks with GeoBenchX's tools over MCP.
@@ -136,15 +135,21 @@ def geobenchx(
             must use, with fallbacks off. For Mistral Small 3.2 this is
             ``venice``: it is the only host with a 256k context. Parasail is
             131072, DeepInfra 128000, and Mistral's own endpoint 32768.
-        solver: Agent to evaluate (default: LangGraph ReAct, recursion limit 25).
+        max_iterations: LangGraph superstep cap. Upstream names this
+            ``max_steps`` (default 25) and passes it as ``recursion_limit``.
+            A YAML run config overrides it with ``task.args.max_iterations``.
+        solver: Agent to evaluate (default: LangGraph ReAct). A custom solver
+            keeps its own limit; this argument is still recorded.
     """
+    if max_iterations < 1:
+        raise ValueError("max_iterations must be at least 1")
     dataset = geobenchx_dataset(group, kind, task_id)
     prompt_date = dataset[0].metadata["prompt_date"] if len(dataset) else ""
     provider = openrouter_extra_body(openrouter_ignore, openrouter_only)
     return Task(
         dataset=dataset,
         setup=[record_run_identity(), publish_mcp_servers(sample_servers)],
-        solver=solver or langgraph_react(recursion_limit=RECURSION_LIMIT),
+        solver=solver or langgraph_react(recursion_limit=max_iterations),
         scorer=[
             geobenchx_steps(),
             geobenchx_scorer(),
@@ -173,7 +178,7 @@ def geobenchx(
             "trajectory_judges": trajectory_judges,
             "openrouter_ignore": openrouter_ignore,
             "openrouter_only": openrouter_only,
-            "recursion_limit": RECURSION_LIMIT,
+            "max_iterations": max_iterations,
             "prompt_date": prompt_date,
             "geobenchx_rev": _revision(),
             "tools_sha256": ported_code_sha256(),

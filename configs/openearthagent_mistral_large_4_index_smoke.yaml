@@ -12,6 +12,7 @@
 task:
   task: agentic_evals/openearthagent
   args:
+    max_iterations: 15
     regime: e2e
     vision: true
     task_id: "3"

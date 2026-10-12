@@ -67,7 +67,7 @@ def eo_gym(
     toolset: Toolset = "skill",
     tool_mode: str = "verified",
     trajectories: int = 3,
-    max_calls: int = 15,
+    max_iterations: int = 15,
     eo_task: str | None = None,
     vision: bool = True,
     execute_url: str = DEFAULT_EXECUTE_URL,
@@ -81,25 +81,31 @@ def eo_gym(
         toolset: "skill" (dataset-mapped tools, main setting) or "all" (35 tools).
         tool_mode: Only "verified" is available in the released code.
         trajectories: Trajectories per task (epochs); Pass@k up to this k.
-        max_calls: Model-turn budget per trajectory (released ``max_iterations``, default 15).
+        max_iterations: Model-turn budget per trajectory (released
+            ``OpenAIFunctionCallEnv.max_iterations``, default 15). The paper
+            evaluates with at most 15 function calls per rollout. A YAML run
+            config overrides it with ``task.args.max_iterations``.
         eo_task: Restrict to one EO task family (e.g. "Temporal Reasoning").
         vision: Whether the model under test accepts images; if false, tasks are recorded as not applicable.
         execute_url: EO-Gym tool server endpoint.
         trajectory_judges: Comma-separated judge models for optional whole-trajectory LLM judges
             (our addition, one scorer per judge; see agentic_evals.scorers.judges).
-        solver: Agent to evaluate (default: LangGraph ReAct).
+        solver: Agent to evaluate (default: LangGraph ReAct). A custom solver
+            keeps its own limit; this argument is still recorded.
     """
     if tool_mode != "verified":
         raise ValueError(
             "EO-Gym's released tools only implement the Verified mode (OPTICAL_BBOX_BACKEND is hard-coded "
             "to 'ground_truth'); an Unverified run would silently be Verified."
         )
+    if max_iterations < 1:
+        raise ValueError("max_iterations must be at least 1")
     lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
     if vision:
         setup = [record_run_identity(), require_tool_server(execute_url), publish_mcp_servers(sample_servers_factory(execute_url))]
-        # The middleware stops after max_calls model turns. The recursion limit
+        # The middleware stops after max_iterations model turns. The recursion limit
         # only has to stay above that (model node + tool node per turn).
-        agent = solver or langgraph_react(max_model_calls=max_calls, recursion_limit=4 * max_calls + 10)
+        agent = solver or langgraph_react(max_model_calls=max_iterations, recursion_limit=4 * max_iterations + 10)
     else:
         setup = [record_run_identity()]
         agent = mark_not_applicable("EO-Gym requires a vision-capable model (imagery is in the prompt)")
@@ -117,7 +123,7 @@ def eo_gym(
             "toolset": toolset,
             "tool_mode": tool_mode,
             "trajectories": trajectories,
-            "max_calls": max_calls,
+            "max_iterations": max_iterations,
             "vision": vision,
             "trajectory_judges": trajectory_judges,
             "eo_gym_revision": lock["eo_gym"]["revision"],

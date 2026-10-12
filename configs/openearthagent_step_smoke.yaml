@@ -1,7 +1,8 @@
 # One OpenEarthAgent step turn, so a W&B run carries the metric guide.
 #
 # Task 0, turn 6 is the Terminate answer for the Banff question. Step mode
-# does not call tools. The solver and the grader both go through OpenRouter,
+# does not call tools. max_iterations is recorded; the solver is still one
+# generate() per gold turn. The solver and the grader both go through OpenRouter,
 # matching configs/earth_bench_qwen3_32b.yaml. Inspect reads .env from this
 # directory for OPENAI_API_KEY / the OpenRouter key.
 #
@@ -10,6 +11,7 @@
 task:
   task: agentic_evals/openearthagent
   args:
+    max_iterations: 15
     regime: step
     vision: false
     task_id: "0"
