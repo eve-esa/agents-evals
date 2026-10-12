@@ -1,8 +1,9 @@
 # GeoBenchX full run: Mistral Large 4 on Mistral's API.
 #
 # Krechetova & Kochedykov, SIGSPATIAL 2025, arXiv:2503.18129, Section 5.
-# Upstream execute_task uses temperature 0 and recursion_limit 25 (set on
-# the task). max_tokens -1 records no output cap (agentic_evals.max_tokens).
+# Upstream execute_task uses temperature 0 and max_iterations 25, passed as
+# LangGraph's recursion_limit (set on the task). max_tokens -1 records no
+# output cap (agentic_evals.max_tokens).
 # Mistral Large 4 rejects temperature 0 unless top_p is 1
 # (invalid_request_greedy_sampling, code 3054, api.mistral.ai, 7 Oct 2026).
 # reasoning_effort none omits the thinking chunk so content stays a string
@@ -26,6 +27,7 @@
 task:
   task: agentic_evals/geobenchx
   args:
+    max_iterations: 25
     group: all
     kind: all
     judges: openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512

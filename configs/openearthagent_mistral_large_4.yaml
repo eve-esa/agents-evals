@@ -20,6 +20,7 @@
 task:
   task: agentic_evals/openearthagent
   args:
+    max_iterations: 15
     regime: e2e
     vision: true
     judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512

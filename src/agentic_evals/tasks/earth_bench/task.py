@@ -79,6 +79,7 @@ def earth_bench(
     answer_key: AnswerKey = "gt_file",
     upstream_compat: bool = False,
     trajectory_judges: str | list[str] = "",
+    max_iterations: int = 50,
     solver: Solver | Agent | None = None,
 ) -> Task:
     """Earth-Bench tasks with Earth-Agent's MCP tool kits.
@@ -92,8 +93,14 @@ def earth_bench(
             the published gold with no scalar expansion (only needed to match published files).
         trajectory_judges: Comma-separated judge models for optional whole-trajectory LLM judges
             (our addition, one scorer per judge; see agentic_evals.scorers.judges).
-        solver: Agent to evaluate (default: LangGraph ReAct, upstream's recursion limit 50).
+        max_iterations: LangGraph superstep cap (upstream ``recursion_limit``, 50).
+            Feng et al. do not state this number; every pinned runner sets it.
+            A YAML run config overrides it with ``task.args.max_iterations``.
+        solver: Agent to evaluate (default: LangGraph ReAct). A custom solver
+            keeps its own limit; this argument is still recorded.
     """
+    if max_iterations < 1:
+        raise ValueError("max_iterations must be at least 1")
     return Task(
         dataset=earth_bench_dataset(regime, modality, answer_key),
         setup=[
@@ -101,7 +108,7 @@ def earth_bench(
             skip_unavailable_rgb(),
             publish_mcp_servers(sample_servers),
         ],
-        solver=solver or langgraph_react(),
+        solver=solver or langgraph_react(recursion_limit=max_iterations),
         scorer=[
             earth_bench_scorer(upstream_compat=upstream_compat),
             *extra_judges(trajectory_judges),
@@ -126,6 +133,7 @@ def earth_bench(
             "answer_key": answer_key,
             "upstream_compat": upstream_compat,
             "trajectory_judges": trajectory_judges,
+            "max_iterations": max_iterations,
             "tools_sha256": ported_code_sha256(),
             **_upstream_revisions(),
         },

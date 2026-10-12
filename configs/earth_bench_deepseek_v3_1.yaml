@@ -4,7 +4,8 @@
 # 671B-total / 37B-active MoE, so it is not size-matched to EVE-Instruct's 24B
 # dense checkpoint; report the active count alongside the total. Their runner
 # (scripts/langchain_deepseek_autoplan.py, agent/config_deepseek.json) uses
-# temperature 0.1, recursion_limit 50, and enable_thinking: false. OpenRouter's
+# temperature 0.1, max_iterations 50 (LangGraph recursion_limit), and
+# enable_thinking: false. OpenRouter's
 # switch for that is reasoning.enabled
 # (https://openrouter.ai/deepseek/deepseek-chat-v3.1).
 #
@@ -18,6 +19,7 @@
 task:
   task: agentic_evals/earth_bench
   args:
+    max_iterations: 50
     regime: ap
     modality: spectrum
 

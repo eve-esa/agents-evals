@@ -18,6 +18,7 @@
 task:
   task: agentic_evals/earth_bench
   args:
+    max_iterations: 50
     regime: ap
     modality: spectrum
 

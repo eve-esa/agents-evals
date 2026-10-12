@@ -1,7 +1,8 @@
 # OpenEarthAgent step (teacher-forced): Mistral Large 4 on Mistral's API.
 #
 # Shabbir et al., arXiv:2602.17665, Table 3. Each gold turn is one sample.
-# No tools run. The end-to-end run is
+# No tools run. max_iterations is recorded; the solver is still one
+# generate() per gold turn. The end-to-end run is
 # configs/openearthagent_mistral_large_4.yaml.
 #
 # Solver: https://docs.mistral.ai/models/mistral-large-4-0 (6 Oct 2026,
@@ -19,6 +20,7 @@
 task:
   task: agentic_evals/openearthagent
   args:
+    max_iterations: 15
     regime: step
     vision: true
     judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512

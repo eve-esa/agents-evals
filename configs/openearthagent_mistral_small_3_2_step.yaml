@@ -1,8 +1,9 @@
 # OpenEarthAgent step (teacher-forced): Mistral Small 3.2 24B Instruct.
 #
 # Shabbir et al., arXiv:2602.17665, Table 3. Each gold turn is one sample.
-# No tools run. Temperature 0.4 and max_tokens 256 are the upstream OpenAI
-# driver's settings (task.py).
+# No tools run. max_iterations is recorded; the solver is still one
+# generate() per gold turn. Temperature 0.4 and max_tokens 256 are the
+# upstream OpenAI driver's settings (task.py).
 #
 # Mistral's API id for this checkpoint, mistral-small-2506, was retired
 # on 31 Jul 2026 (https://docs.mistral.ai/models). OpenRouter still lists
@@ -19,6 +20,7 @@
 task:
   task: agentic_evals/openearthagent
   args:
+    max_iterations: 15
     regime: step
     vision: true
     judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512

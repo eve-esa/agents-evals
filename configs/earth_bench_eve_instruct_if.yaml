@@ -29,6 +29,7 @@
 task:
   task: agentic_evals/earth_bench
   args:
+    max_iterations: 50
     regime: if
     modality: all
     trajectory_judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
