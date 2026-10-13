@@ -1,0 +1,503 @@
+{
+  "orchestrator": [
+    "get_filelist"
+  ],
+  "embedding_model": null,
+  "algorithm": "files",
+  "k": 5,
+  "files": {
+    "analysis": "src/agentic_evals/tasks/earth_bench/tools/Analysis.py",
+    "index": "src/agentic_evals/tasks/earth_bench/tools/Index.py",
+    "inversion": "src/agentic_evals/tasks/earth_bench/tools/Inversion.py",
+    "perception": "src/agentic_evals/tasks/earth_bench/tools/Perception.py",
+    "statistics": "src/agentic_evals/tasks/earth_bench/tools/Statistics.py"
+  },
+  "tools": {
+    "compute_linear_trend": "c45b4061290cd945",
+    "mann_kendall_test": "2b1eb1c8491e7bd5",
+    "sens_slope": "1a50334e33fb52b6",
+    "stl_decompose": "cd6d5116177872b0",
+    "detect_change_points": "035b6b388fbcf158",
+    "autocorrelation_function": "4f77c4070d81d7a7",
+    "detect_seasonality_acf": "80be6596085b6a4c",
+    "getis_ord_gi_star": "be8da81465e70783",
+    "analyze_hotspot_direction": "2e43e84fa9508af4",
+    "count_spikes_from_values": "1c3270401ab20d06",
+    "calculate_batch_ndvi": "7549a36bd28a6281",
+    "calculate_batch_ndwi": "10143934a005c311",
+    "calculate_batch_ndbi": "d6f2c0d1b1f6ee3a",
+    "calculate_batch_evi": "ca5b7a0820026012",
+    "calculate_batch_nbr": "18e54bf6e15d8c4f",
+    "calculate_batch_fvc": "cb08fc7af577770c",
+    "calculate_batch_wri": "73d847a04835dcfb",
+    "calculate_batch_ndti": "b86a96632d499b0e",
+    "calculate_batch_frp": "d7cd525829c3bcd4",
+    "calculate_batch_ndsi": "b13797ff8c9297bf",
+    "calc_extreme_snow_loss_percentage_from_binary_map": "13ee53f7308db460",
+    "compute_tvdi": "9deca29d63ade8c8",
+    "band_ratio": "a82a3f4eab6d8207",
+    "lst_single_channel": "606c6f4b2c6eb841",
+    "lst_multi_channel": "b6cca92c49bb1fce",
+    "split_window": "7af16df7f216cf03",
+    "temperature_emissivity_separation": "951d478db98383fd",
+    "modis_day_night_lst": "d8b11d4c878003d9",
+    "ttm_lst": "eef374e1c7165bf1",
+    "calculate_mean_lst_by_ndvi": "86af9285286bb1a3",
+    "calculate_max_lst_by_ndvi": "f0a24f6ad4d38911",
+    "ATI": "6af1d690e31de65e",
+    "dual_polarization_differential": "0ad9c952298b2a26",
+    "dual_frequency_diff": "f9b0c3d38b44d68d",
+    "multi_freq_bt": "076b0132eddd894e",
+    "chang_single_param_inversion": "15c35fd66bfefe7f",
+    "nasa_team_sea_ice_concentration": "06980e330b1365f6",
+    "dual_polarization_ratio": "452b0396edfb749d",
+    "calculate_water_turbidity_ntu": "c5d78426700a56bb",
+    "threshold_segmentation": "a055fb443b5ead9f",
+    "bbox_expansion": "b48c7aff6c796635",
+    "count_above_threshold": "acd046c2f1555355",
+    "count_skeleton_contours": "37e67a1ecb005a5f",
+    "bboxes2centroids": "99454f9210d88a9d",
+    "centroid_distance_extremes": "b1ff27fb1dbf766c",
+    "calculate_bbox_area": "1992dcc5274fdfa2",
+    "MSCN": "dbef3e9551f3f361",
+    "RemoteCLIP": "2421c0bae31d6244",
+    "Strip_R_CNN": "204db1504918a9b7",
+    "SM3Det": "ad2a96e597abb5b6",
+    "RemoteSAM": "a6845f6c54222bc9",
+    "InstructSAM": "19b5415c7847a945",
+    "SAM2": "d4ec9e9939c0fc37",
+    "ChangeOS": "349940b061885715",
+    "coefficient_of_variation": "dcf11becd982f304",
+    "skewness": "69bdc87f1e01a66e",
+    "kurtosis": "b01d65359e50d23d",
+    "calc_batch_image_mean": "d2e9ee0d7684e622",
+    "calc_batch_image_std": "e96790bd60fa5dfa",
+    "calc_batch_image_median": "8e2cbdd0bb56aa0d",
+    "calc_batch_image_min": "56bfada9659ad326",
+    "calc_batch_image_max": "27a1c6ae0fbbc023",
+    "calc_batch_image_skewness": "ae554fa01be0b3d5",
+    "calc_batch_image_kurtosis": "369f2e6ab5494590",
+    "calc_batch_image_sum": "a3ae00a2b36f6b79",
+    "calc_batch_image_hotspot_percentage": "5a7436ce2fb9a352",
+    "calc_batch_image_hotspot_tif": "b6f538f2577a68c2",
+    "difference": "faccd3b1317035c8",
+    "division": "d9983e5da9d4699e",
+    "percentage_change": "7f528562fe6cc273",
+    "kelvin_to_celsius": "d81a797b6719ccd2",
+    "celsius_to_kelvin": "ac2e0b9dbe3b4e3f",
+    "max_value_and_index": "bf92aa1d07dc89d0",
+    "min_value_and_index": "2f5fe36cd95754ff",
+    "multiply": "c68f35663c13879e",
+    "ceil_number": "08db0d862e851253",
+    "get_list_object_via_indexes": "25d9d9139dda644b",
+    "mean": "d54b6b45ecae4ff8",
+    "calculate_threshold_ratio": "b55b6724a0c2de13",
+    "calc_batch_fire_pixels": "730d893f3e9f8952",
+    "create_fire_increase_map": "593aa1699c91b77e",
+    "identify_fire_prone_areas": "9a6df0d0bcc4143d",
+    "get_percentile_value_from_image": "353effd1f6a10912",
+    "image_division_mean": "a1805dea68a84b45",
+    "calculate_intersection_percentage": "5b477c237b64bf89",
+    "calc_batch_image_mean_mean": "f0b468aede0d68ed",
+    "calc_batch_image_mean_max": "717d58ef925114c9",
+    "calc_batch_image_mean_max_min": "5fd8f97ced0cb8bc",
+    "calc_batch_image_mean_threshold": "c7773891ad59a88f",
+    "calculate_multi_band_threshold_ratio": "488399bfad31e724",
+    "count_pixels_satisfying_conditions": "1f1c4fc7d0f542e6",
+    "count_images_exceeding_threshold_ratio": "084b2e968b8f3416",
+    "average_ratio_exceeding_threshold": "56e57b48712bb764",
+    "count_images_exceeding_mean_multiplier": "3d688a093afc2c4e",
+    "calculate_band_mean_by_condition": "cc5e61b1f8779980",
+    "calc_threshold_value_mean": "97084b1f6efefe6e",
+    "calculate_tif_average": "a0602ca4280e0015",
+    "calculate_tif_difference": "6a230844837cfcd0",
+    "subtract": "bc2b4501133bdc40",
+    "calculate_area": "df8f28750bd0696a",
+    "grayscale_to_colormap": "0b90f58cbc576bd3",
+    "get_filelist": "794e5e4288a135ad",
+    "radiometric_correction_sr": "ec6522a95ad9c890",
+    "apply_cloud_mask": "e99272f8c18158c8"
+  },
+  "specialists": [
+    {
+      "slug": "geospatial_analysis",
+      "name": "Geospatial Analysis Agent",
+      "description": "Analyzes spatial hotspot direction and univariate time series patterns, including trends, seasonality, spikes, and structural changes. It can also compute local spatial autocorrelation statistics for a raster.",
+      "tools": [
+        "analyze_hotspot_direction",
+        "autocorrelation_function",
+        "compute_linear_trend",
+        "count_spikes_from_values",
+        "detect_change_points",
+        "detect_seasonality_acf",
+        "getis_ord_gi_star",
+        "mann_kendall_test",
+        "sens_slope",
+        "stl_decompose"
+      ],
+      "skills": [
+        {
+          "id": "analyze_hotspot_direction",
+          "name": "Analyze hotspot direction",
+          "description": "Finds the cardinal direction with the greatest concentration of hotspot pixels in a binary hotspot map. A request must include the path to a GeoTIFF whose hotspot pixels are encoded as value 1.",
+          "tags": [
+            "hotspots",
+            "raster",
+            "spatial analysis"
+          ],
+          "examples": [
+            "Analyze the main concentration direction in data/hotspots_2024.tif; hotspots are encoded as 1."
+          ]
+        },
+        {
+          "id": "analyze_time_series",
+          "name": "Analyze univariate time series",
+          "description": "Computes time-series measures such as trends, autocorrelation, seasonality, spikes, change points, and STL components. A request must provide the numeric series and any required x values, thresholds, lag count, model, penalty, or seasonal period for the requested analysis.",
+          "tags": [
+            "time series",
+            "trend",
+            "seasonality",
+            "change points"
+          ],
+          "examples": [
+            "For values [2.1, 2.4, 2.2, 3.0, 3.6, 3.5], compute a linear trend using x=[0, 1, 2, 3, 4, 5], run the Mann-Kendall test, and estimate Sen's slope.",
+            "For values [10, 11, 10, 14, 10, 11, 10, 14], detect seasonality with min_acf=0.3 and compute the ACF through 6 lags.",
+            "For signal [1.0, 1.1, 1.0, 5.0, 5.1, 5.2], detect change points using model='l2' and penalty=10, and count upward spikes with threshold=2.0."
+          ]
+        },
+        {
+          "id": "compute_getis_ord_gi_star",
+          "name": "Compute local spatial autocorrelation",
+          "description": "Computes Getis-Ord Gi* scores for a single-band raster using a supplied spatial weight kernel and saves the result as a GeoTIFF. A request must include the input raster path, the weight matrix, and the output path.",
+          "tags": [
+            "spatial autocorrelation",
+            "hotspots",
+            "raster"
+          ],
+          "examples": [
+            "Compute Gi* for data/temperature.tif using weight matrix [[1,1,1],[1,1,1],[1,1,1]] and save it to results/temperature_gi_star.tif."
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou analyze binary hotspot-map direction, univariate time series, and local spatial autocorrelation on raster data. Your time-series tasks include linear trends, Mann-Kendall testing, Sen's slope, autocorrelation, seasonality, spike counts, change points, and STL decomposition. You do not calculate remote-sensing indices, fire-pixel or hotspot percentages, or perform image segmentation and detection; direct those requests to the agent responsible for those calculations or imagery tasks.\n\n## Required inputs\nFor hotspot direction, require the hotspot GeoTIFF path; hotspot pixels must be encoded as 1. For Gi*, require the single-band input raster path, a 2D weight matrix, and an output path. For time-series requests, require the values. Linear trend also needs x when the caller wants specific independent-variable values; otherwise the function can use default indices. Require nlags for a specified ACF range, min_acf for a specified seasonality threshold, spike_threshold for spike counts, model and penalty when specifying change-point settings, and period for STL. Check these requirements in that order before any tool runs. For STL, robust is optional; verbose is optional for spike counting.\n\n## How to work\nMatch each request to the relevant analysis task. Use the hotspot-direction analysis for a binary map; report its returned direction, including \"no hotspots found\" when returned. Use the Gi* calculation with the supplied raster, weights, and output path, then check that a saved path is returned. For time series, call only the analyses requested and pass the supplied values and parameters. Check each result against the requested task. If a result is empty or reports no cycle or hotspots, state that plainly rather than inferring a pattern. If a call fails, report the failure; do not substitute invented values. When practical, check the inputs and retry a failed call once without changing their meaning.\n\n## What to report\nReport returned trend measures and test statistics with their returned values; do not claim units unless the input's units are provided. For ACF, report lag values and autocorrelations; for seasonality, the returned period or no-cycle result; for spikes, the count; for change points, the returned indices; and for STL, the trend, seasonal, and residual components. Report the hotspot direction and the Gi* output file path. Include failures or unavailable results."
+    },
+    {
+      "slug": "raster_index",
+      "name": "Raster Index Agent",
+      "description": "Calculates environmental indices and fire masks from local raster bands, and measures the proportion of extreme snow and ice loss in a binary map. It supports batch processing for several indices and can compute TVDI for a single NDVI/LST pair.",
+      "tools": [
+        "calc_extreme_snow_loss_percentage_from_binary_map",
+        "calculate_batch_evi",
+        "calculate_batch_frp",
+        "calculate_batch_fvc",
+        "calculate_batch_nbr",
+        "calculate_batch_ndbi",
+        "calculate_batch_ndsi",
+        "calculate_batch_ndti",
+        "calculate_batch_ndvi",
+        "calculate_batch_ndwi",
+        "calculate_batch_wri",
+        "compute_tvdi"
+      ],
+      "skills": [
+        {
+          "id": "batch_raster_index_calculation",
+          "name": "Calculate raster indices in batches",
+          "description": "Calculates EVI, FVC, NBR, NDBI, NDSI, NDTI, NDVI, NDWI, or WRI from the required raster bands and saves outputs. A request must provide matching input-path lists, output paths, and any required EVI coefficients or FVC thresholds.",
+          "tags": [
+            "remote sensing",
+            "raster indices",
+            "vegetation",
+            "water"
+          ],
+          "examples": [
+            "Calculate NDVI for NIR rasters [data/scene_2022-05-01_nir.tif, data/scene_2022-06-01_nir.tif] and Red rasters [data/scene_2022-05-01_red.tif, data/scene_2022-06-01_red.tif]. Save to [outputs/ndvi_may.tif, outputs/ndvi_june.tif].",
+            "Calculate EVI from NIR [data/a_nir.tif], Red [data/a_red.tif], and Blue [data/a_blue.tif]; save to [outputs/a_evi.tif] with G=2.5, C1=6, C2=7.5, and L=1.",
+            "Calculate FVC from NIR [data/a_nir.tif, data/b_nir.tif] and Red [data/a_red.tif, data/b_red.tif], save to [outputs/a_fvc.tif, outputs/b_fvc.tif], using ndvi_min=0.15 and ndvi_max=0.85."
+          ]
+        },
+        {
+          "id": "batch_frp_mask_calculation",
+          "name": "Calculate fire masks from FRP rasters",
+          "description": "Calculates fire masks for a batch of FRP raster files using the supplied fire threshold and saves each result. A request must include the FRP input paths, corresponding output paths, and threshold if a non-default value is needed.",
+          "tags": [
+            "fire",
+            "frp",
+            "raster",
+            "mask"
+          ],
+          "examples": [
+            "Create FRP fire masks from [data/frp_2023-07-01.tif, data/frp_2023-07-02.tif], save to [outputs/fire_2023-07-01.tif, outputs/fire_2023-07-02.tif], using fire_threshold=5.0."
+          ]
+        },
+        {
+          "id": "tvdi_and_snow_loss_assessment",
+          "name": "Compute TVDI and snow loss percentage",
+          "description": "Computes a TVDI raster from an NDVI and LST raster, or calculates the percentage of extreme snow/ice loss pixels in a binary raster. A request must provide the required raster paths and, for TVDI, an output path.",
+          "tags": [
+            "tvdi",
+            "snow loss",
+            "drought",
+            "raster"
+          ],
+          "examples": [
+            "Compute TVDI from NDVI data/ndvi_2022-08-01.tif and LST data/lst_2022-08-01.tif; save the output to outputs/tvdi_2022-08-01.tif.",
+            "Calculate the percentage of extreme snow and ice loss areas in data/snow_loss_binary.tif, where value 1 represents loss."
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou handle raster-based environmental index calculations, batch FRP mask generation, TVDI calculation, and the percentage calculation for extreme snow/ice loss binary maps. You do not handle time-series statistics, hotspot analysis, other specialized retrieval or inversion methods, image segmentation or detection, cloud masking, or general hotspot/image summary metrics. For those requests, say that another agent specializing in the relevant analysis should take them.\n\n## Required inputs\nFor batch indices, require the correct band-path list or lists and an output path for every input set. EVI additionally requires G, C1, C2, and L. FVC requires ndvi_min and ndvi_max when non-default thresholds are intended. For FRP masks, require FRP input paths and matching output paths; use the default threshold only if none is specified. For TVDI, require an NDVI path, an LST path, and an output path. For extreme snow/ice loss percentage, require a binary-map path. Check these requirements and matching list lengths before any tool runs; do not infer paths, band roles, thresholds, or coefficients.\n\n## How to work\nChoose the batch calculation matching the requested index and pass the supplied paths and parameters in their stated roles. Use the batch FRP calculation for FRP masks, compute_tvdi for a single NDVI/LST pair, and the binary-map percentage calculation for snow/ice loss. Check returned messages, paths, or values for each requested item. If a call fails, report the failure and do not claim an output was produced. If results are empty or missing, verify the supplied inputs and matching path lists with the requester; do not silently substitute data or parameters.\n\n## What to report\nReport calculated index or mask outputs and their returned status or paths. For TVDI, report the exported raster path. For the snow/ice loss calculation, report the returned percentage as a proportion on the 0.0–1.0 scale, not as a 0–100 percentage unless explicitly converted and labeled. Identify missing outputs, failed calls, and any required inputs that were not provided."
+    },
+    {
+      "slug": "thermal_remote_sensing",
+      "name": "Thermal Remote Sensing Agent",
+      "description": "Estimates land surface temperature and related thermal or microwave remote-sensing parameters from local raster inputs. It also computes selected vegetation-conditioned temperature statistics, water turbidity, precipitable water vapor, and sea ice concentration.",
+      "tools": [
+        "ATI",
+        "band_ratio",
+        "calculate_max_lst_by_ndvi",
+        "calculate_mean_lst_by_ndvi",
+        "calculate_water_turbidity_ntu",
+        "chang_single_param_inversion",
+        "dual_frequency_diff",
+        "dual_polarization_differential",
+        "dual_polarization_ratio",
+        "lst_multi_channel",
+        "lst_single_channel",
+        "modis_day_night_lst",
+        "multi_freq_bt",
+        "nasa_team_sea_ice_concentration",
+        "split_window",
+        "temperature_emissivity_separation",
+        "ttm_lst"
+      ],
+      "skills": [
+        {
+          "id": "estimate_land_surface_temperature",
+          "name": "Estimate land surface temperature",
+          "description": "Estimates LST from thermal bands, brightness temperatures, emissivity, or day/night inputs using the supported methods. A request must include all required local raster paths, the output path, and any method-specific options.",
+          "tags": [
+            "land surface temperature",
+            "thermal",
+            "raster"
+          ],
+          "examples": [
+            "Estimate LST with the multi-channel method from data/band31.tif and data/band32.tif; save to results/lst.tif.",
+            "Estimate LST with the single-channel method from data/bt.tif, data/red.tif, and data/nir.tif; save to results/lst.tif.",
+            "Estimate LST and emissivity using TTM from data/tir_b10.tif, data/tir_b11.tif, and data/tir_b12.tif; use wavelengths [8.3, 8.65, 9.1] μm and save to results/ttm.tif."
+          ]
+        },
+        {
+          "id": "invert_remote_sensing_parameters",
+          "name": "Invert thermal and microwave parameters",
+          "description": "Derives parameters such as apparent thermal inertia, PWV, soil moisture, vegetation water content, vegetation index, LAI, sea ice concentration, and water turbidity from the required raster inputs. A request must provide every input path, the parameter or method and its required thresholds or coefficients, and an output path when the method writes a raster.",
+          "tags": [
+            "parameter inversion",
+            "microwave",
+            "precipitable water vapor",
+            "sea ice"
+          ],
+          "examples": [
+            "Compute ATI from data/day_bt.tif, data/night_bt.tif, and data/albedo.tif; save to results/ati.tif.",
+            "Estimate soil moisture with the dual-frequency differential method from data/band1.tif and data/band2.tif, using alpha=0.5 and beta=0.1; save to results/sm.tif.",
+            "Calculate turbidity using the power method from data/red.tif with a=2, b=0.1, and n=1.5; save to results/turbidity.tif."
+          ]
+        },
+        {
+          "id": "summarize_lst_by_ndvi",
+          "name": "Summarize LST by NDVI",
+          "description": "Calculates maximum LST for one image set or mean LST across multiple image sets in regions selected by an NDVI threshold. A request must include matching red, NIR, and LST raster path or paths, a numeric threshold, and whether to select NDVI above or below it.",
+          "tags": [
+            "ndvi",
+            "lst statistics",
+            "vegetation"
+          ],
+          "examples": [
+            "Find the maximum LST where NDVI is at least 0.3 using data/red.tif, data/nir.tif, and data/lst.tif.",
+            "Calculate mean LST below an NDVI threshold of 0.2 for data/red1.tif and data/red2.tif, data/nir1.tif and data/nir2.tif, and data/lst1.tif and data/lst2.tif."
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou handle raster-based thermal and microwave remote-sensing estimates: land surface temperature, apparent thermal inertia, precipitable water vapor, selected microwave parameter inversions, sea ice concentration, water turbidity, and LST summaries selected by NDVI. You also calculate maximum or mean LST by NDVI threshold. Decline unrelated tasks, including time-series analysis, fire or spectral-index batch analysis, image segmentation or detection, cloud masking, and hotspot summaries; direct those to an agent specializing in that task.\n\n## Required inputs\nCheck all inputs before any tool runs. For LST, require the paths specified by the requested method and an output path: band 31/32 for multi-channel; brightness temperature, red, and NIR for single-channel; day/night brightness temperature and emissivity for MODIS day/night; four thermal/emissivity paths and parameter for split-window; TIR paths and representative index for TES; or three TIR paths for TTM (wavelengths are optional). For ATI require day temperature, night temperature, albedo, and output paths. For band-ratio PWV require bands 02, 05, 17, 18, 19 and output path; for split-window PWV require its four bands, parameter, and output path. For NDVI statistics require matching red, NIR, and LST paths, threshold, and above/below mode. For each other inversion, require its documented raster paths, parameter or method, required coefficients or reference values, and output path. Do not assume missing paths, bands, thresholds, parameters, or coefficients.\n\n## How to work\nChoose the method matching the request and use its corresponding owned capability. Check that the result is the requested scalar or output path. For empty or NaN NDVI statistics, report that no valid selected pixels were found; do not substitute another threshold. If a call fails, report the failure and missing or unusable inputs indicated; retry only after a correctable input issue is clarified. Do not infer unprovided calibration values.\n\n## What to report\nReport computed values and their units when the tool description specifies them; do not invent units otherwise. For raster-producing tasks, report the returned output file path and any described output bands. State failures, empty results, or NaN values plainly, and distinguish those from successful estimates."
+    },
+    {
+      "slug": "remote_sensing_vision",
+      "name": "Remote Sensing Vision Agent",
+      "description": "Analyzes remote-sensing images to detect and count objects, classify scenes, locate and segment regions, and produce change masks. It can also perform basic raster thresholding and measurements from bounding boxes or binary masks.",
+      "tools": [
+        "ChangeOS",
+        "InstructSAM",
+        "MSCN",
+        "RemoteCLIP",
+        "RemoteSAM",
+        "SAM2",
+        "SM3Det",
+        "Strip_R_CNN",
+        "bbox_expansion",
+        "bboxes2centroids",
+        "calculate_bbox_area",
+        "centroid_distance_extremes",
+        "count_above_threshold",
+        "count_skeleton_contours",
+        "threshold_segmentation"
+      ],
+      "skills": [
+        {
+          "id": "remote_sensing_image_analysis",
+          "name": "Analyze remote-sensing images",
+          "description": "Classifies image scenes and detects, counts, or localizes described objects and regions. A request must provide the image path and, for object detection, counting, or grounding, the target description; specify which image to use when multiple images are involved.",
+          "tags": [
+            "remote sensing",
+            "image classification",
+            "object detection",
+            "object counting",
+            "localization"
+          ],
+          "examples": [
+            "Count storage tanks in data/scene_A.png.",
+            "Detect ships in data/harbor_01.tif and return their bounding boxes.",
+            "Classify data/scene_B.jpg and report the predicted class and top-five predictions."
+          ]
+        },
+        {
+          "id": "image_segmentation_and_change",
+          "name": "Segment regions and detect image change",
+          "description": "Creates a change mask from pre- and post-images, segments a described image region using a bounding box, or segments buildings by comparing an image with itself. A request must provide the input image path or both comparison image paths, the required prompt or bounding box when applicable, and an output path when the operation writes a mask.",
+          "tags": [
+            "image segmentation",
+            "change detection",
+            "remote sensing",
+            "building segmentation"
+          ],
+          "examples": [
+            "Create a change mask comparing data/pre.tif and data/post.tif; save it to results/change_mask.tif.",
+            "Segment the building in data/city.png using bounding box [120, 80, 260, 210] and save to results/building_mask.png.",
+            "Segment buildings in data/city.png by comparing the image with itself and save to results/building_mask.png."
+          ]
+        },
+        {
+          "id": "raster_and_geometry_measurements",
+          "name": "Measure raster masks and detected objects",
+          "description": "Applies a fixed threshold to create a binary raster mask, counts above-threshold pixels or skeletonized contours, and computes bounding-box areas, centroids, or centroid-distance extremes. A request must include the input path and the relevant threshold, bounding boxes, ground sampling distance, or other required measurement inputs.",
+          "tags": [
+            "raster analysis",
+            "thresholding",
+            "bounding boxes",
+            "spatial measurement"
+          ],
+          "examples": [
+            "Threshold data/brightness.tif at 100 and write the binary mask to results/bright_mask.tif.",
+            "Count pixels above 0.7 in data/hotspots.tif.",
+            "For boxes [[10, 20, 30, 50], [50, 60, 20, 10]] in x,y,w,h format, calculate total area using GSD 0.5 meters per pixel."
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou handle remote-sensing image classification, object detection and counting, region grounding and segmentation, image change masks, threshold segmentation, and measurements of pixels, contours, bounding boxes, and centroids. Decline requests for time-series statistics, spectral-index calculations, cloud masking, or other analyses outside these capabilities; direct those to an agent specializing in the relevant time-series, spectral, or raster-analysis task.\n\n## Required inputs\nCheck required inputs in order before any tool runs. For classification, provide one image path. For object counting or detection, provide an image path and a target description; for region grounding, provide an image path and region description. For change masks, provide pre-image path, post-image path, and output path; building segmentation by change masking requires the same image path in both image fields and an output path. For SAM2 segmentation, provide image path, bounding box, and output path. Threshold segmentation requires image path, numeric threshold, and output path; above-threshold counting requires image path and threshold; skeleton-contour counting requires a binary image path. Bounding-box area requires boxes in [x,y,w,h] form and GSD if area in square meters is wanted. Centroid conversion and distance extremes require bounding boxes in [x_min,y_min,x_max,y_max] form or centroid coordinates, respectively. Bounding-box expansion requires boxes, radius, and GSD.\n\n## How to work\nChoose the image-analysis task that matches the request. Use MSCN or RemoteCLIP for scene classification; use InstructSAM for counts, SM3Det for general object boxes, and Strip_R_CNN for ship-focused detections. Use RemoteSAM to ground a described region, then SAM2 when a segmented mask is requested. Use ChangeOS for image comparisons or same-image building segmentation. Use threshold_segmentation, count_above_threshold, and count_skeleton_contours for their stated raster tasks; use the geometry functions for requested box or centroid calculations. Check each result against the requested output. If a result is empty, report that and do not invent detections; if a call fails, report the failure and retry only when a clear input correction or alternative supported model is available.\n\n## What to report\nReport predicted classes and confidence values, counts, bounding-box coordinates, centroid coordinates, distances, areas and units, or pixel and contour counts as applicable. State the paths of mask files written. Identify empty results, failed calls, and any requested outputs that could not be produced."
+    },
+    {
+      "slug": "raster_analysis",
+      "name": "Raster Analysis Agent",
+      "description": "Analyzes raster images and batches using pixel statistics, threshold conditions, and image comparisons. It can also apply Landsat 8 surface reflectance corrections and create cloud masks or fire-related raster outputs.",
+      "tools": [
+        "apply_cloud_mask",
+        "average_ratio_exceeding_threshold",
+        "calc_batch_fire_pixels",
+        "calc_batch_image_hotspot_percentage",
+        "calc_batch_image_hotspot_tif",
+        "calc_batch_image_kurtosis",
+        "calc_batch_image_max",
+        "calc_batch_image_mean",
+        "calc_batch_image_mean_max",
+        "calc_batch_image_mean_max_min",
+        "calc_batch_image_mean_mean",
+        "calc_batch_image_mean_threshold",
+        "calc_batch_image_median",
+        "calc_batch_image_min",
+        "calc_batch_image_skewness",
+        "calc_batch_image_std",
+        "calc_batch_image_sum",
+        "calc_threshold_value_mean",
+        "calculate_area",
+        "calculate_band_mean_by_condition",
+        "calculate_intersection_percentage",
+        "calculate_multi_band_threshold_ratio",
+        "calculate_threshold_ratio",
+        "calculate_tif_average",
+        "calculate_tif_difference",
+        "ceil_number",
+        "celsius_to_kelvin",
+        "coefficient_of_variation",
+        "count_images_exceeding_mean_multiplier",
+        "count_images_exceeding_threshold_ratio",
+        "count_pixels_satisfying_conditions",
+        "create_fire_increase_map",
+        "difference",
+        "division",
+        "get_list_object_via_indexes",
+        "get_percentile_value_from_image",
+        "grayscale_to_colormap",
+        "identify_fire_prone_areas",
+        "image_division_mean",
+        "kelvin_to_celsius",
+        "kurtosis",
+        "max_value_and_index",
+        "mean",
+        "min_value_and_index",
+        "multiply",
+        "percentage_change",
+        "radiometric_correction_sr",
+        "skewness",
+        "subtract"
+      ],
+      "skills": [
+        {
+          "id": "raster_statistics",
+          "name": "Calculate raster statistics and threshold measures",
+          "description": "Computes raster and batch statistics, pixel ratios, threshold counts, and conditional measurements. A request must provide the input image paths and the requested statistic or threshold settings, including band indices where needed.",
+          "tags": [
+            "raster statistics",
+            "threshold analysis",
+            "pixel metrics"
+          ],
+          "examples": [
+            "For data/ndvi_2023.tif and data/ndvi_2024.tif, calculate the average percentage of pixels above 0.3, considering only images where more than 20% of pixels exceed 0.3.",
+            "Count pixels in data/multiband.tif satisfying band 0 above 0.3 and band 1 below 0.7.",
+            "Calculate the mean of band 2 in data/scene.tif where band 1 is at least 0.3."
+          ]
+        },
+        {
+          "id": "raster_transformations",
+          "name": "Transform and classify raster images",
+          "description": "Applies Landsat 8 surface-reflectance correction or QA_PIXEL cloud masking, computes raster averages or differences, and creates fire or hotspot classification outputs. A request must include all input paths, required thresholds or band paths, and output paths.",
+          "tags": [
+            "raster processing",
+            "cloud masking",
+            "fire mapping",
+            "image comparison"
+          ],
+          "examples": [
+            "Apply a cloud and shadow mask to data/scene_SR_B5.tif using data/scene_QA_PIXEL.tif and save to outputs/masked_B5.tif.",
+            "Correct Landsat 8 surface reflectance in data/scene_SR_B4.tif and save to outputs/corrected_B4.tif.",
+            "Create a fire increase map from data/fire_change.tif using a 25 MW threshold and save to outputs/fire_increase.tif."
+          ]
+        },
+        {
+          "id": "raster_area_and_visualization",
+          "name": "Measure raster area and create colorized images",
+          "description": "Calculates the area of non-zero pixels using a supplied ground sample distance, or applies a named colormap to a grayscale image. Requests must provide the image path and the applicable ground sample distance or colormap and output settings.",
+          "tags": [
+            "raster area",
+            "colormap",
+            "geospatial imagery"
+          ],
+          "examples": [
+            "Calculate the non-zero area in data/hotspots.tif using a ground sample distance of 30 meters.",
+            "Colorize data/temperature.tif with the viridis colormap, save as outputs/temperature.png, and preserve georeferencing."
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou handle raster and batch-image statistics, pixel threshold and band-condition analysis, raster differences and averages, Landsat 8 surface-reflectance correction and cloud masking, fire/hotspot raster classification, non-zero-pixel area calculation, and grayscale colormaps. Decline requests outside these capabilities; direct time-series trend, autocorrelation, change-point, and spatial-cluster analyses to a temporal or spatial statistics agent. Direct EVI, FRP, FVC, NBR, NDBI, NDSI, NDTI, snow-loss, and specialized index or model requests to the relevant index or remote-sensing model agent.\n\n## Required inputs\nBefore any tool call, check that the request includes the input image path or paths and the requested operation. Threshold analyses need threshold values and comparison mode; multiband conditions need zero-based band indices, thresholds, and above/below modes. Conditional band means need condition and target band indices. Area calculation needs ground sample distance if area units are requested. Corrections and masks need the input band, output path, and, for masking, QA_PIXEL path. Raster differences need both image paths and an output path. Fire or hotspot outputs need their threshold and output path; batch hotspot maps need one output path per input. Colormaps need the colormap name, save path, and whether to preserve georeferencing.\n\n## How to work\nChoose the tool matching the requested task and use its documented inputs. For batch statistics, retain the returned values in input order; distinguish percentages, counts, pixel-value statistics, and area. For transformations, use the requested output path and check the returned path or classification threshold. For an empty result, report the returned zero or NaN as applicable; do not invent a value or silently change criteria. If a call fails, report the failure and do not claim an output was produced. Ask for missing required inputs rather than guessing.\n\n## What to report\nGive computed values with their documented units or scale, such as percentages, pixel counts, raster-value statistics, meters-based area, or MW thresholds. Identify each result with its input image and band or condition where relevant. Report every returned output file path, classification threshold, empty-result value, and failure; distinguish returned results from interpretations."
+    }
+  ],
+  "describer_model": "openai/gpt-6-luna"
+}

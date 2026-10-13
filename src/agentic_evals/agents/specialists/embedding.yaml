@@ -1,0 +1,45 @@
+# Embedding endpoint for the tool clustering (agents/specialists/clustering.py).
+#
+# Used when the clusters are generated (the clustering CLI, or the solver with
+# recompute=true). Eval runs read the committed clusters/*.json and never call it.
+# Any OpenAI-compatible endpoint works; change the three fields below.
+#
+# The key is not stored here. api_key_env names the environment variable that
+# holds it, and .env (gitignored) sets that variable.
+
+# OpenAI-compatible base URL, including the /v1 path.
+base_url: https://openrouter.ai/api/v1
+
+# Environment variable that holds the API key.
+api_key_env: REDACTED_OPENROUTER_KEY
+
+# Embedding model id as the endpoint lists it.
+model: qwen/qwen3-embedding-4b
+
+# Clustering settings per benchmark, used by the clustering CLI. Any key left out
+# takes the default: algorithm ward, n_agents auto, tools_per_agent 9, max_agents 12.
+#   algorithm:       ward | kmeans (embedding clusters) | files (one specialist
+#                    per MCP server file in the task's tool package; no embeddings)
+#   n_agents:        a number of specialists, or auto (silhouette score)
+#   tools_per_agent: target tools per specialist when n_agents is not set
+#   max_agents:      upper bound on the number of specialists
+#   (n_agents, tools_per_agent and max_agents apply to ward and kmeans only.)
+# CLI flags (--algorithm, --n-agents, ...) override these for one run.
+benchmarks:
+  earth_bench:
+    algorithm: files
+  geobenchx:
+    algorithm: kmeans
+    n_agents: auto
+  eo_gym:
+    algorithm: kmeans
+    n_agents: auto
+
+# Chat model that writes each specialist's A2A text from its tools: the
+# AgentCard name and description, its AgentSkills, and the role part of its
+# system prompt. The orchestrator routes steps by these cards, so they matter.
+describer:
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+  model: openai/gpt-6-luna
+

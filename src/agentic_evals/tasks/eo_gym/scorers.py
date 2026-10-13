@@ -47,7 +47,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from agentic_evals.agents.trace_callback import read_trace
+from agentic_evals.agents.trace_callback import recorded_trace
 from agentic_evals.tasks.eo_gym import metrics
 
 DEFAULT_JUDGE = "openai/gpt-4.1-mini"
@@ -104,8 +104,8 @@ async def judge_answer(question: str, reference: str, candidate: str) -> tuple[b
 
 
 def trajectory_steps(state: TaskState) -> list[metrics.Step]:
-    trace = read_trace(state.store)
-    if trace:
+    trace = recorded_trace(state.store)
+    if trace is not None:
         return [metrics.Step(e["name"], e["input"], e.get("output") if not e.get("error_message") else e["error_message"]) for e in trace]
     steps: list[metrics.Step] = []
     results = {m.tool_call_id: m.text for m in state.messages if m.role == "tool"}

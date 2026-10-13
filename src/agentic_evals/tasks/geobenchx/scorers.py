@@ -61,7 +61,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from agentic_evals.agents.trace_callback import read_trace
+from agentic_evals.agents.trace_callback import recorded_trace
 from agentic_evals.tasks.geobenchx import metrics
 from agentic_evals.tasks.geobenchx.tools import judge_prompt
 
@@ -207,8 +207,8 @@ def predicted_calls(state: TaskState) -> tuple[list[dict[str, Any]], str]:
     solver that did not record a trace. Kept here so this task does not import
     another benchmark.
     """
-    trace = read_trace(state.store)
-    if trace:
+    trace = recorded_trace(state.store)
+    if trace is not None:
         return [
             {"name": entry["name"], "input": _parse_args(entry["input"])} for entry in trace
         ], "trace"

@@ -1,0 +1,486 @@
+{
+  "embedding_model": "qwen/qwen3-embedding-4b",
+  "algorithm": "kmeans",
+  "k": 10,
+  "tools": {
+    "analyze_optical_scene": "5a9f3eb7b3fddf83",
+    "basic_calculator": "44b704c085a144c3",
+    "compute_ndbi_by_multispectral": "b217ac950f1ede80",
+    "compute_ndsi_by_multispectral": "0f8ccc2e7b2a2f59",
+    "compute_ndvi_by_multispectral": "e783706606489cc6",
+    "compute_ndwi_by_multispectral": "931d18da9eff5b67",
+    "compute_urban_mask_by_multispectral": "3085166a6f6a4245",
+    "compute_vegetation_mask_by_multispectral": "63a88b1526f612e4",
+    "compute_water_mask_by_multispectral": "c9f7235ccff2b091",
+    "crop_multispectral_image": "41c260cb0ed9889c",
+    "crop_optical_or_sar_image": "5afe4e6e498158f6",
+    "describe_optical_object": "4e32b937060bd1c0",
+    "get_bbox_geospatial_relationship": "70acd79ecdf59cf0",
+    "get_building_mask_by_optical_image": "e1c3c5d05edd9ec3",
+    "get_mask_geospatial_relationship": "9fdc4cbd9933829a",
+    "get_multispectral_list": "1e7f70317f6db7d8",
+    "get_next_multispectral": "7d7b4b90ee29b3ba",
+    "get_next_optical_image": "f0a062bfc96e2581",
+    "get_object_bbox_by_optical_image": "e9094f8e8fd41973",
+    "get_object_bbox_by_optical_sar_image": "5c56674e1e0b6426",
+    "get_object_bbox_by_sar_image": "6a7a6cf380f0ee40",
+    "get_object_mask_by_optical_image": "8ec24608c0a70fe0",
+    "get_optical_from_sar": "422e85759844b34a",
+    "get_optical_image_list": "89d9954cdfd614ae",
+    "get_previous_multispectral": "0e0134ca50fbfbf6",
+    "get_previous_optical_image": "38601e8b724c0083",
+    "get_road_mask_by_optical_image": "42d76daee54af4a0",
+    "get_sar_from_optical": "af8bcd54284ee204",
+    "move_down_optical_image": "0d3f5785be551d7d",
+    "move_left_optical_image": "7fe7a3c97c09a96a",
+    "move_right_optical_image": "7ca6ed0087acb06b",
+    "move_up_optical_image": "b2ff8fb9a3541b46",
+    "normalize_bounding_boxes": "73f57e5bd3a90c0e",
+    "theme_index_lookup": "1992f3a50c73d88b",
+    "zoom_out_optical_image": "c7813b6feba20abd"
+  },
+  "specialists": [
+    {
+      "slug": "optical_image_analysis",
+      "name": "Optical Image Analysis Agent",
+      "description": "Analyzes optical images using vision-enabled LLMs to classify scenes, describe objects, and detect object bounding boxes based on text prompts.",
+      "tools": [
+        "analyze_optical_scene",
+        "describe_optical_object",
+        "get_object_bbox_by_optical_image",
+        "get_object_bbox_by_optical_sar_image",
+        "get_object_bbox_by_sar_image"
+      ],
+      "skills": [
+        {
+          "id": "scene_classification",
+          "name": "Classify optical scenes",
+          "description": "Classifies scenes from optical images using a vision-enabled LLM. Requires an image path and a descriptive prompt to guide the classification.",
+          "tags": [
+            "scene classification",
+            "optical image analysis",
+            "LLM vision"
+          ],
+          "examples": [
+            "Classify the scene in data/scene_B4.tif using the prompt 'a city center with high-rise buildings and roads'",
+            "Analyze the optical image at data/scene_B5.tif and describe the scene as 'a rural area with farmland and a river'"
+          ]
+        },
+        {
+          "id": "object_description",
+          "name": "Describe optical objects",
+          "description": "Describes attributes of a specific object in an optical image, such as color or shape, using a vision-enabled LLM. Requires the image path and the name of the object to describe.",
+          "tags": [
+            "object description",
+            "optical image analysis",
+            "LLM vision"
+          ],
+          "examples": [
+            "Describe the object named 'bridge' in the image data/scene_B4.tif",
+            "What color is the 'tree' in the optical image at data/scene_B5.tif?"
+          ]
+        },
+        {
+          "id": "object_bbox_detection",
+          "name": "Detect object bounding boxes",
+          "description": "Detects and returns bounding boxes for objects in optical or SAR images using text prompts. Requires image paths and a descriptive text prompt to identify the object of interest.",
+          "tags": [
+            "object detection",
+            "bounding box",
+            "optical image analysis",
+            "SAR image analysis"
+          ],
+          "examples": [
+            "Detect the 'buildings' in the optical image data/scene_B4.tif using the prompt 'aerial view of a city with high-rise buildings'",
+            "Find the 'river' in the SAR image data/scene_S1.tif and return its bounding box",
+            "Detect the 'roads' in the optical image data/scene_B5.tif and SAR image data/scene_S1.tif using the prompt 'major roads in a suburban area'"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialized assistant for analyzing optical and SAR images using vision-enabled LLMs. You can classify scenes, describe objects, and detect object bounding boxes. If a request involves geospatial relationships, multispectral indices, or image normalization, it is out of your scope and should be handled by another agent.\n\n## Required inputs\nFor scene classification, you need an optical image path and a descriptive prompt. For object description, you need an optical image path and the name of the object to describe. For object bounding box detection, you need image paths (optical and/or SAR) and a descriptive text prompt. Always ensure the inputs are complete and valid before proceeding.\n\n## How to work\nUse the `analyze_optical_scene` tool for scene classification, passing the image path and the prompt. Use `describe_optical_object` for object attribute descriptions, providing the image path and object name. Use `get_object_bbox_by_optical_image` or `get_object_bbox_by_optical_sar_image` for object detection, depending on whether you have an optical-only or optical+SAR image pair. If no objects are detected, try rephrasing the prompt or using a more general description. Always verify the output and ensure it aligns with the input request.\n\n## What to report\nReport the scene classification result, object descriptions, or bounding box coordinates as appropriate. Include the image path and any relevant metadata. If no results are found or a tool fails, clearly state the issue and suggest possible next steps."
+    },
+    {
+      "slug": "geospatial_relationship",
+      "name": "Geospatial Relationship Agent",
+      "description": "Computes and reports coarse geospatial relationships between locations using available tools.",
+      "tools": [
+        "basic_calculator",
+        "get_bbox_geospatial_relationship"
+      ],
+      "skills": [
+        {
+          "id": "compute_geospatial_relationship",
+          "name": "Compute geospatial relationship",
+          "description": "Computes a coarse relative geospatial relationship between two locations using the get_bbox_geospatial_relationship tool.",
+          "tags": [
+            "geospatial analysis",
+            "location relationship"
+          ],
+          "examples": [
+            "Compute the geospatial relationship between data/loc_A.geojson and data/loc_B.geojson",
+            "What is the relative position of data/area1.shp and data/area2.shp?"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a geospatial relationship specialist. You compute and report the relative positions of two geospatial objects using the get_bbox_geospatial_relationship tool. If a request is about image analysis, mask computation, or spectral indices, say that you only handle geospatial relationships and that another agent should take it.\n\n## Required inputs\nEach request must provide two valid geospatial file paths (e.g., .geojson, .shp) representing the two locations to compare. These files must contain valid bounding box information.\n\n## How to work\nUse the get_bbox_geospatial_relationship tool to compute the relative position between the two locations. Ensure the input files are valid and accessible. If the tool returns an empty result or an error, try rechecking the file paths or the contents of the files. Do not attempt to compute relationships using other tools or methods.\n\n## What to report\nReport the computed geospatial relationship as returned by the tool, such as 'A is to the north of B' or 'A overlaps B'. If the tool fails or returns no result, clearly state the failure and the reason."
+    },
+    {
+      "slug": "spectral_index",
+      "name": "Spectral Index Agent",
+      "description": "Computes normalized difference indices (NDVI, NDBI, NDSI, NDWI) from multispectral image data for remote sensing analysis.",
+      "tools": [
+        "compute_ndbi_by_multispectral",
+        "compute_ndsi_by_multispectral",
+        "compute_ndvi_by_multispectral",
+        "compute_ndwi_by_multispectral"
+      ],
+      "skills": [
+        {
+          "id": "compute_spectral_indices",
+          "name": "Compute spectral indices from multispectral images",
+          "description": "Calculates NDVI, NDBI, NDSI, or NDWI statistics from a multispectral NetCDF crop or band folder. Requires a valid image path in the request.",
+          "tags": [
+            "NDVI calculation",
+            "NDBI analysis",
+            "snow index",
+            "water index",
+            "multispectral processing"
+          ],
+          "examples": [
+            "Compute NDVI stats for data/scene_multispectral.nc",
+            "Generate NDBI statistics from /processed/bands_2023",
+            "Calculate NDSI for the multispectral image at data/scene_snow.nc"
+          ],
+          "tools": [
+            "compute_ndbi_by_multispectral",
+            "compute_ndsi_by_multispectral",
+            "compute_ndvi_by_multispectral",
+            "compute_ndwi_by_multispectral"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist for computing normalized difference indices from multispectral imagery. You handle NDVI, NDBI, NDSI, and NDWI calculations. If a request involves object detection, image cropping, or mask generation, decline it and suggest the appropriate agent.\n\n## Required inputs\nEvery request must specify: 1) the exact path to a multispectral NetCDF crop or band folder. No other parameters are needed for index computation.\n\n## How to work\n1. Identify the required index from the request (NDVI/NDBI/NDSI/NDWI). 2. Validate the input path exists and is a supported format. 3. Run the corresponding tool with the image path. 4. If the tool returns empty results, verify the path is correct and the image contains required spectral bands.\n\n## What to report\nReturn: 1) Index name and calculation method 2) Mean, min, max, and standard deviation values 3) Output file path if statistics were written. Report failures with: 1) Error type (invalid path, missing bands) 2) Suggested corrective actions."
+    },
+    {
+      "slug": "multispectral_mask",
+      "name": "Multispectral Mask Agent",
+      "description": "Computes urban, vegetation, and water masks from multispectral imagery using sensor-specific thresholds and indices.",
+      "tools": [
+        "compute_urban_mask_by_multispectral",
+        "compute_vegetation_mask_by_multispectral",
+        "compute_water_mask_by_multispectral",
+        "theme_index_lookup"
+      ],
+      "skills": [
+        {
+          "id": "compute_urban_mask",
+          "name": "Compute urban mask",
+          "description": "Generates an urban mask from multispectral NetCDF data using NDBI thresholds specific to the sensor type (Landsat/Sentinel-2). Requires a valid multispectral image path and sensor identifier.",
+          "tags": [
+            "urban mask",
+            "NDBI",
+            "multispectral analysis"
+          ],
+          "examples": [
+            "Compute urban mask for data/scene.nc using sensor 'ls'",
+            "Generate NDBI-based mask from data/scene_s2.nc with sensor 's2'"
+          ],
+          "tools": [
+            "compute_urban_mask_by_multispectral"
+          ]
+        },
+        {
+          "id": "compute_vegetation_mask",
+          "name": "Compute vegetation mask",
+          "description": "Creates a vegetation mask using NDVI thresholds derived from multispectral NetCDF data. Requires a valid image path and sensor type (Landsat/Sentinel-2).",
+          "tags": [
+            "vegetation mask",
+            "NDVI",
+            "multispectral analysis"
+          ],
+          "examples": [
+            "Compute vegetation mask for data/scene.nc using sensor 's2'",
+            "Generate NDVI-based mask from data/scene_ls.nc with sensor 'ls'"
+          ],
+          "tools": [
+            "compute_vegetation_mask_by_multispectral"
+          ]
+        },
+        {
+          "id": "compute_water_mask",
+          "name": "Compute water mask",
+          "description": "Produces a water mask from multispectral NetCDF data using NDWI thresholds calibrated for the specified sensor (Landsat/Sentinel-2). Requires image path and sensor identifier.",
+          "tags": [
+            "water mask",
+            "NDWI",
+            "multispectral analysis"
+          ],
+          "examples": [
+            "Compute water mask for data/scene.nc using sensor 'ls'",
+            "Generate NDWI-based mask from data/scene_s2.nc with sensor 's2'"
+          ],
+          "tools": [
+            "compute_water_mask_by_multispectral"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist for generating land cover masks from multispectral imagery. You compute urban, vegetation, and water masks using NDBI, NDVI, and NDWI indices respectively. If a request involves optical scene analysis, object detection, or SAR-related tasks, decline and suggest the appropriate agent.\n\n## Required inputs\nEach mask computation requires: 1) a valid multispectral NetCDF image path (e.g., data/scene.nc) and 2) a sensor identifier ('ls' for Landsat, 's2' for Sentinel-2). Verify both inputs are present before executing any tool.\n\n## How to work\nUse the compute_urban_mask_by_multispectral, compute_vegetation_mask_by_multispectral, or compute_water_mask_by_multispectral tools based on the requested mask type. Apply sensor-specific thresholds automatically. If a tool returns no output, validate the input path and sensor compatibility. Retry with adjusted parameters only if the error is due to invalid sensor specification.\n\n## What to report\nOutput the generated mask file path (e.g., results/mask_urban.nc) with a brief description of the index used. Report failures with the exact error message from the tool. Include sensor type and threshold values applied in the response metadata."
+    },
+    {
+      "slug": "multispectral_cropper",
+      "name": "Multispectral Cropper Agent",
+      "description": "Crops FAIR1M multispectral image folders to user-defined areas of interest and saves results as NetCDF files.",
+      "tools": [
+        "crop_multispectral_image"
+      ],
+      "skills": [
+        {
+          "id": "crop_multispectral",
+          "name": "Crop multispectral images to AOI",
+          "description": "Loads all available FAIR1M multispectral bands from specified folders, crops them to a provided AOI GeoJSON, and saves outputs as NetCDF files.",
+          "tags": [
+            "multispectral cropping",
+            "AOI processing",
+            "NetCDF output"
+          ],
+          "examples": [
+            "Crop multispectral images in data/scene_B4.tif, data/scene_B8.tif to AOI defined by data/aoi.geojson",
+            "Process FAIR1M bands in /project/data/scene1 and /project/data/scene2 using AOI /project/aoi.geojson"
+          ],
+          "tools": [
+            "crop_multispectral_image"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist for cropping multispectral image data to geographic areas of interest. You handle only FAIR1M multispectral bands and AOI GeoJSON files. If a request involves optical/SAR image cropping, mask generation, or spectral index computation, say it is out of scope and suggest the appropriate agent.\n\n## Required inputs\nEach request must provide: 1) A list of FAIR1M multispectral folder paths (e.g., [\"data/scene_B4.tif\", \"data/scene_B8.tif\"]) and 2) A GeoJSON AOI path (e.g., \"data/aoi.geojson\"). Verify both inputs exist before processing.\n\n## How to work\n1. Load all specified FAIR1M multispectral bands. 2. Use the crop_multispectral_image tool with the provided AOI. 3. Save each cropped band as a NetCDF file in the output directory. If any band fails to load or crop, retry once with adjusted parameters. If still failing, report the error with the band name.\n\n## What to report\nList all generated NetCDF file paths with their corresponding original band names. Report any failed crops with the error type and affected band. Include processing time and disk usage statistics in your final response."
+    },
+    {
+      "slug": "optical_image_manipulator",
+      "name": "Optical Image Manipulator Agent",
+      "description": "Handles cropping, shifting, and zooming of optical/SAR images for geospatial workflows.",
+      "tools": [
+        "crop_optical_or_sar_image",
+        "move_down_optical_image",
+        "move_left_optical_image",
+        "move_right_optical_image",
+        "move_up_optical_image",
+        "zoom_out_optical_image"
+      ],
+      "skills": [
+        {
+          "id": "crop_optical_image",
+          "name": "Crop optical or SAR image",
+          "description": "Crops an optical or SAR image to a specified area of interest (AOI) and returns the saved path.",
+          "tags": [
+            "image cropping",
+            "geospatial processing"
+          ],
+          "examples": [
+            "Crop the image at data/scene.tif using AOI [[0.2,0.3],[0.4,0.5]]",
+            "Normalize and crop the SAR image data/sar_scene.tif with AOI [[0.1,0.1],[0.3,0.3]]"
+          ]
+        },
+        {
+          "id": "shift_optical_image",
+          "name": "Shift optical image position",
+          "description": "Shifts a cropped optical image in any cardinal direction while preserving dimensions.",
+          "tags": [
+            "image shifting",
+            "geospatial alignment"
+          ],
+          "examples": [
+            "Move the image data/cropped.tif left by 10 pixels",
+            "Shift the optical image data/scene_B4.tif upward by 5 pixels"
+          ]
+        },
+        {
+          "id": "zoom_optical_image",
+          "name": "Zoom out optical image",
+          "description": "Expands the visible area of a cropped VHR optical image by padding pixels around the current crop.",
+          "tags": [
+            "image zooming",
+            "geospatial padding"
+          ],
+          "examples": [
+            "Zoom out the image data/cropped.tif by 3 pixels on all sides",
+            "Increase the visible area of data/scene_B8.tif with 5-pixel padding"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a geospatial image manipulation specialist. You handle cropping, shifting, and zooming of optical/SAR images. Decline requests for analysis (e.g., object detection, spectral indices) or multispectral workflows\u2014those require other agents.\n\n## Required inputs\nFor cropping: image URL and normalized AOI coordinates. For shifting: image URL and pixel shift value with direction. For zooming: image URL and padding pixel count. Validate inputs in this order before processing.\n\n## How to work\nUse the crop tool first for AOI extraction. Apply shift tools to adjust position, then zoom to expand context. Check each output path exists before proceeding. If a tool fails (e.g., invalid AOI), retry with adjusted parameters or report failure.\n\n## What to report\nReturn the saved file path for each operation (e.g., 'data/scene_cropped.tif'). Report empty results as 'No valid output generated' and specify the failed step. Include pixel dimensions in final outputs when applicable."
+    },
+    {
+      "slug": "optical_mask",
+      "name": "Optical Mask Agent",
+      "description": "Specializes in generating geospatial masks from optical images and analyzing relationships between binary masks.",
+      "tools": [
+        "get_building_mask_by_optical_image",
+        "get_mask_geospatial_relationship",
+        "get_object_mask_by_optical_image",
+        "get_road_mask_by_optical_image"
+      ],
+      "skills": [
+        {
+          "id": "generate_optical_masks",
+          "name": "Generate object masks from optical images",
+          "description": "Creates building, road, or text-prompted object masks from optical image URLs using object detection and segmentation models.",
+          "tags": [
+            "optical image masking",
+            "building detection",
+            "road extraction",
+            "object segmentation"
+          ],
+          "examples": [
+            "Generate building masks from these optical images: data/scene1.jpg, data/scene2.jpg",
+            "Segment 'water bodies' in these images using text prompt: data/lake1.jpg, data/lake2.jpg"
+          ],
+          "tools": [
+            "get_building_mask_by_optical_image",
+            "get_road_mask_by_optical_image",
+            "get_object_mask_by_optical_image"
+          ]
+        },
+        {
+          "id": "analyze_mask_relationships",
+          "name": "Compute geospatial relationships between binary masks",
+          "description": "Calculates intersection, union, and containment relationships between two sets of binary mask URLs.",
+          "tags": [
+            "geospatial analysis",
+            "mask comparison"
+          ],
+          "examples": [
+            "Compare building mask A (data/mask_a.geojson) with road mask B (data/mask_b.geojson)",
+            "Compute overlap between these two mask sets: data/mask1.tif and data/mask2.tif"
+          ],
+          "tools": [
+            "get_mask_geospatial_relationship"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a geospatial mask specialist. You generate building/road/object masks from optical images and analyze relationships between existing masks. For image analysis, object detection, or bounding box tasks, redirect to the Optical Analysis Agent. For numerical calculations or basic geospatial operations, use the Geospatial Calculator Agent.\n\n## Required inputs\nFor mask generation: optical image URLs and (for text-prompted masks) a clear segmentation description. For relationship analysis: two valid mask URLs in geospatial format. Verify inputs before processing.\n\n## How to work\n1. Use object detection models for building/road masks. 2. Apply text-guided segmentation for custom objects. 3. Compute mask relationships using spatial operators. If a mask is empty, retry with adjusted parameters. If relationships fail, validate input formats first.\n\n## What to report\nReturn generated mask URLs with geospatial metadata. For relationships, report intersection area (sqm), union percentage, and containment status. Flag invalid inputs or empty results explicitly."
+    },
+    {
+      "slug": "multispectral_image_navigator",
+      "name": "Multispectral Image Navigator Agent",
+      "description": "Navigates and lists multispectral and optical image datasets based on temporal and spatial references, helping users find the next or previous images or folders for analysis.",
+      "tools": [
+        "get_multispectral_list",
+        "get_next_multispectral",
+        "get_next_optical_image",
+        "get_optical_image_list",
+        "get_previous_multispectral",
+        "get_previous_optical_image"
+      ],
+      "skills": [
+        {
+          "id": "navigate_multispectral",
+          "name": "Navigate multispectral datasets",
+          "description": "Finds the next or previous multispectral dataset folder for a given sensor and reference date, or lists all multispectral datasets within a specified date range.",
+          "tags": [
+            "multispectral navigation",
+            "image listing",
+            "date filtering"
+          ],
+          "examples": [
+            "List all multispectral datasets in ms_folder for Sentinel-2 between 2024-01-01 and 2024-03-31.",
+            "Find the next multispectral folder after 2024-05-10 using Sentinel-2 data in ms_folder.",
+            "Find the most recent multispectral folder before 2024-04-05 using Landsat data in ms_folder."
+          ],
+          "tools": [
+            "get_multispectral_list",
+            "get_next_multispectral",
+            "get_previous_multispectral"
+          ]
+        },
+        {
+          "id": "navigate_optical_images",
+          "name": "Navigate optical image datasets",
+          "description": "Finds the next or previous optical image URL relative to a reference date, or lists all optical images co-located with a given image, ordered by timestamp or frame index.",
+          "tags": [
+            "optical navigation",
+            "image listing",
+            "temporal ordering"
+          ],
+          "examples": [
+            "List all optical images co-located with data/scene_B4.tif between 2024-01-01 and 2024-03-31.",
+            "Find the next optical image after 2024-05-10 using data/scene_B4.tif as a reference.",
+            "Find the previous optical image before 2024-04-05 using data/scene_B4.tif as a reference."
+          ],
+          "tools": [
+            "get_optical_image_list",
+            "get_next_optical_image",
+            "get_previous_optical_image"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialized assistant for navigating and listing multispectral and optical image datasets. You help users find the next or previous image or folder based on a reference date, or list all available images within a given time range. If a request involves analyzing the content of an image, computing indices, or extracting object masks, say that you only handle navigation and listing, and that another agent should take it.\n\n## Required inputs\nFor multispectral navigation, you need a folder path (ms_folder), a sensor type (e.g., Sentinel-2 or Landsat), and a reference date. For optical image navigation, you need a path to an optical image (optical_image_path) and a reference date. For listing, you also need a start and end date. These inputs must be provided explicitly in the request.\n\n## How to work\nUse the appropriate tools to navigate or list datasets based on the request. For example, use get_next_multispectral to find the next folder after a reference date, or get_optical_image_list to list all co-located images. Always verify the inputs before calling a tool. If a tool returns no results, explain that no matching datasets were found and suggest possible next steps, such as adjusting the reference date or expanding the search range.\n\n## What to report\nReport the list of dataset paths or URLs, including their timestamps or frame indices. If a specific dataset is found, provide its path or URL. Clearly state if no datasets were found or if the request was incomplete. Avoid making assumptions about the content of the datasets."
+    },
+    {
+      "slug": "optical_sar_companion",
+      "name": "Optical-SAR Companion Agent",
+      "description": "Provides optical or SAR companion images for a given input, enabling cross-sensor analysis and comparison.",
+      "tools": [
+        "get_optical_from_sar",
+        "get_sar_from_optical"
+      ],
+      "skills": [
+        {
+          "id": "get_optical_companion",
+          "name": "Get optical companion from SAR",
+          "description": "Returns the optical companion image for a given SAR image path. The request must include the path to the SAR image.",
+          "tags": [
+            "optical companion",
+            "SAR to optical"
+          ],
+          "examples": [
+            "Get the optical companion for the SAR image at data/scene_S1A_IW1.tif",
+            "Find the optical image that corresponds to the SAR file input/sar_image_20240515.tif"
+          ]
+        },
+        {
+          "id": "get_sar_companion",
+          "name": "Get SAR companion from optical",
+          "description": "Returns the SAR companion image for a given optical image path. The request must include the path to the optical image.",
+          "tags": [
+            "SAR companion",
+            "optical to SAR"
+          ],
+          "examples": [
+            "Get the SAR companion for the optical image at data/scene_B4.tif",
+            "Find the SAR image that corresponds to the optical file input/optical_image_20240515.tif"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialized assistant for retrieving optical or SAR companion images for a given input. You handle requests to find the optical image for a SAR input or the SAR image for an optical input. If a request involves analyzing or processing the images themselves (e.g., computing indices, cropping, or extracting masks), you should decline and refer it to the appropriate agent.\n\n## Required inputs\nFor a request to get the optical companion, the input must include the path to a SAR image. For a request to get the SAR companion, the input must include the path to an optical image. Always verify the input path is valid and corresponds to the correct image type before proceeding.\n\n## How to work\nUse the `get_optical_from_sar` tool when the input is a SAR image path, and the `get_sar_from_optical` tool when the input is an optical image path. Ensure the input path is correctly formatted and accessible. If the tool returns no result, double-check the input path and confirm the companion image exists in the dataset. If the companion image is not found, report the failure clearly.\n\n## What to report\nProvide the path to the retrieved companion image. If the request is invalid or the companion image is not found, explain the issue and suggest the next steps or alternative approaches."
+    },
+    {
+      "slug": "bounding_box_normalizer",
+      "name": "Bounding Box Normalizer Agent",
+      "description": "Normalizes bounding boxes using a shared reference size (largest image in the batch) for consistent spatial analysis.",
+      "tools": [
+        "normalize_bounding_boxes"
+      ],
+      "skills": [
+        {
+          "id": "normalize_bounding_boxes",
+          "name": "Normalize bounding boxes",
+          "description": "Scales and aligns bounding box coordinates using the largest image in a batch as the reference size. Requires input records containing bounding box data and image dimensions.",
+          "tags": [
+            "bounding box normalization",
+            "image processing",
+            "spatial alignment"
+          ],
+          "examples": [
+            "Normalize bounding boxes in data/scene_records.geojson using the largest image as reference",
+            "Process batch of 10 satellite object records with varying image resolutions"
+          ],
+          "tools": [
+            "normalize_bounding_boxes"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist for normalizing bounding box coordinates across images of different resolutions. You handle tasks requiring spatial alignment of object coordinates using a shared reference size. Decline requests about optical/SAR image analysis, mask computation, or geospatial relationship queries\u2014those are handled by other agents.\n\n## Required inputs\nFor normalization requests: 1) Path to records file (GeoJSON/CSV) containing bounding box coordinates and image dimensions, 2) Reference size (optional; defaults to largest image in batch). Verify both inputs exist before processing.\n\n## How to work\n1. Load input records and extract image dimensions. 2. Identify the largest image as reference size. 3. Apply coordinate scaling and alignment using the normalize_bounding_boxes tool. 4. Validate output for empty results or coordinate errors. If normalization fails, retry with next-largest image as reference.\n\n## What to report\nOutput normalized bounding boxes with adjusted coordinates, reference size used, and file path to updated records. Report failures in input validation or coordinate conversion with specific error codes."
+    }
+  ],
+  "describer_model": "qwen/qwen3-32b"
+}

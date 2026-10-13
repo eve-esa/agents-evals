@@ -1,0 +1,38 @@
+# Earth-Bench with the orchestrator and A2A specialists (agents/specialists),
+# Qwen3-32B via OpenRouter, same model and generate settings as
+# earth_bench_qwen3_32b.yaml so the two runs differ only in the solver.
+#
+# The solver reads the committed clusters/earth_bench.json, so no embedding
+# call is made. Each specialist's model calls go through the eval's model.
+#
+# Ten questions, five at a time. The rasters for 1-10 are under data/earth_bench on the pod.
+#
+#   uv run inspect eval --run-config configs/earth_bench_specialists_qwen3_32b.yaml --display plain
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: spectrum
+
+solver: agentic_evals/langgraph_specialists
+
+model:
+  model: openai-api/openrouter/qwen/qwen3-32b
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+generate_config:
+  temperature: 0.1
+  max_tokens: -1
+  max_retries: 5
+  extra_body:
+    reasoning:
+      enabled: false
+
+eval_config:
+  sample_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  epochs: 1
+  max_samples: 5
+  fail_on_error: false

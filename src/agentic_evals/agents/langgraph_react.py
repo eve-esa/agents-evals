@@ -30,13 +30,21 @@ from inspect_ai.util import store
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware
 from langchain.agents.middleware.types import ModelResponse
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage, convert_to_messages
-from langgraph.types import Command
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+    convert_to_messages,
+)
+from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.interceptors import MCPToolCallRequest
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
 from langgraph.errors import GraphRecursionError
+from langgraph.types import Command
 from mcp import ClientSession
 from mcp.types import CallToolResult, TextContent
 
@@ -286,6 +294,94 @@ async def _tool_errors_to_model(request: MCPToolCallRequest, handler):
         )
 
 
+async def load_mcp_tools_from(servers: dict[str, dict[str, Any]], stack: AsyncExitStack) -> list[BaseTool]:
+    """Tools of every server in ``servers``, with sessions held open on ``stack``."""
+    client = MultiServerMCPClient(servers)
+    tools: list[BaseTool] = []
+    for server_name in servers:
+        session = await stack.enter_async_context(client.session(server_name))
+        tools.extend(
+            await load_mcp_tools(session, server_name=server_name, tool_interceptors=[_tool_errors_to_model])
+        )
+        _skip_output_schema_validation(session)
+    return tools
+
+
+async def load_task_mcp_tools(stack: AsyncExitStack) -> list[BaseTool]:
+    """Tools of every MCP server the task published, with sessions held open on ``stack``."""
+    return await load_mcp_tools_from(mcp_servers(), stack)
+
+
+def default_middleware(max_model_calls: int | None) -> list[AgentMiddleware]:
+    middleware: list[AgentMiddleware] = [
+        NormalizeMistralToolCalls(),
+        ToolImagesAsUserMessage(),
+    ]
+    if max_model_calls is not None:
+        middleware.append(ModelCallLimitMiddleware(run_limit=max_model_calls, exit_behavior="end"))
+    return middleware
+
+
+def with_system_text(messages: list[BaseMessage], text: str | None) -> list[BaseMessage]:
+    """Add ``text`` to the sample's system message, or put it first as one.
+
+    One system message, not two: the task's own system prompt stays first and
+    unchanged, and ``text`` follows it.
+    """
+    if not text:
+        return messages
+    if messages and isinstance(messages[0], SystemMessage):
+        first = messages[0]
+        return [first.model_copy(update={"content": f"{_message_text(first)}\n\n{text}"}), *messages[1:]]
+    return [SystemMessage(content=text), *messages]
+
+
+async def run_graph(
+    graph: Any,
+    bridge: Any,
+    state: AgentState,
+    recorder: TraceRecorder,
+    recursion_limit: int,
+    *,
+    system_text: str | None = None,
+    callbacks: list[Any] | None = None,
+) -> str:
+    """Invoke ``graph`` on the sample's messages; return the termination reason.
+
+    ``system_text`` is agent setup added to the system prompt (``with_system_text``).
+    ``callbacks`` default to ``[recorder]``. When the model-turn cap stopped a run
+    that used domain tools (``recorder.entries``), the final answer is replaced as
+    ``truncated_final_answer`` describes.
+    """
+    messages = convert_to_messages(await messages_to_openai(state.messages))
+    messages = with_system_text(messages, system_text)
+    termination = "completed"
+    try:
+        result = await graph.ainvoke(
+            {"messages": messages},
+            config={
+                "recursion_limit": recursion_limit,
+                "callbacks": [recorder] if callbacks is None else callbacks,
+                "configurable": {"thread_id": str(uuid4())},
+            },
+        )
+    except GraphRecursionError:
+        termination = "recursion_limit"
+        result = None
+    replacement = None
+    if result is not None:
+        replacement = truncated_final_answer(
+            _last_ai_text(list(result.get("messages") or [])),
+            tool_calls=len(recorder.entries),
+        )
+    if replacement is not None:
+        model_name = bridge.state.output.model or ""
+        bridge.state.messages.append(ChatMessageAssistant(content=replacement, model=model_name, source="generate"))
+        bridge.state.output = ModelOutput.from_content(model=model_name, content=replacement)
+        termination = "max_model_calls"
+    return termination
+
+
 @agent
 def langgraph_react(
     recursion_limit: int = 50,
@@ -308,60 +404,15 @@ def langgraph_react(
     async def execute(state: AgentState) -> AgentState:
         recorder = TraceRecorder(agent_name=name)
         async with agent_bridge(state) as bridge:
-            servers = mcp_servers()
             async with AsyncExitStack() as stack:
-                client = MultiServerMCPClient(servers)
-                tools = []
-                for server_name in servers:
-                    session = await stack.enter_async_context(client.session(server_name))
-                    tools.extend(
-                        await load_mcp_tools(
-                            session, server_name=server_name, tool_interceptors=[_tool_errors_to_model]
-                        )
-                    )
-                    _skip_output_schema_validation(session)
-
-                middleware: list[AgentMiddleware] = [
-                    NormalizeMistralToolCalls(),
-                    ToolImagesAsUserMessage(),
-                ]
-                if max_model_calls is not None:
-                    middleware.append(
-                        ModelCallLimitMiddleware(run_limit=max_model_calls, exit_behavior="end")
-                    )
+                tools = await load_task_mcp_tools(stack)
                 graph = create_agent(
                     ChatOpenAI(model="inspect", api_key="inspect"),
                     tools=tools,
-                    middleware=middleware,
+                    middleware=default_middleware(max_model_calls),
                     name=name,
                 )
-                messages = convert_to_messages(await messages_to_openai(state.messages))
-                termination = "completed"
-                try:
-                    result = await graph.ainvoke(
-                        {"messages": messages},
-                        config={
-                            "recursion_limit": recursion_limit,
-                            "callbacks": [recorder],
-                            "configurable": {"thread_id": str(uuid4())},
-                        },
-                    )
-                except GraphRecursionError:
-                    termination = "recursion_limit"
-                    result = None
-                replacement = None
-                if result is not None:
-                    replacement = truncated_final_answer(
-                        _last_ai_text(list(result.get("messages") or [])),
-                        tool_calls=len(recorder.entries),
-                    )
-                if replacement is not None:
-                    model_name = bridge.state.output.model or ""
-                    bridge.state.messages.append(
-                        ChatMessageAssistant(content=replacement, model=model_name, source="generate")
-                    )
-                    bridge.state.output = ModelOutput.from_content(model=model_name, content=replacement)
-                    termination = "max_model_calls"
+                termination = await run_graph(graph, bridge, state, recorder, recursion_limit)
             recorder.save()
             store().set(TERMINATION_KEY, termination)
             return bridge.state

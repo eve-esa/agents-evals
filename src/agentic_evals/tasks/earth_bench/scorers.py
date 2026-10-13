@@ -39,7 +39,7 @@ from typing import Any
 from inspect_ai.scorer import Score, Target, mean, scorer, stderr
 from inspect_ai.solver import TaskState
 
-from agentic_evals.agents.trace_callback import read_trace
+from agentic_evals.agents.trace_callback import recorded_trace
 from agentic_evals.tasks.earth_bench import metrics
 from agentic_evals.tasks.earth_bench.tools import is_tool_failure, scalar_str_params
 
@@ -57,8 +57,8 @@ def _parse_args(arguments: Any) -> Any:
 
 def predicted_calls(state: TaskState) -> tuple[list[dict[str, Any]], str]:
     """Tool calls made by the agent, from our trace if present, else from messages."""
-    trace = read_trace(state.store)
-    if trace:
+    trace = recorded_trace(state.store)
+    if trace is not None:
         return [{"name": e["name"], "input": _parse_args(e["input"]), "output": e.get("output"), "error": e.get("error", False)} for e in trace], "trace"
     calls = []
     for message in state.messages:

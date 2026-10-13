@@ -65,7 +65,7 @@ from typing import Any
 
 from inspect_ai.hooks import Hooks, SampleEnd, TaskEnd, TaskStart, hooks
 
-from agentic_evals.agents.trace_callback import TRACE_KEY
+from agentic_evals.agents.trace_callback import RAW_TRACE_KEY, SUBAGENT_TRACES_KEY, TRACE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -854,9 +854,21 @@ def trace_records(samples: list[Any] | None) -> list[dict[str, Any]]:
                 "labels": metadata.get("labels"),
                 "readable_trace": render_transcript(sample),
                 "trace": _trace_entries(getattr(sample, "store", None)),
+                **_agent_traces(getattr(sample, "store", None)),
             }
         )
     return records
+
+
+def _agent_traces(store: Any) -> dict[str, Any]:
+    """A multi-agent run's orchestrator and sub-agent traces; empty for a single agent."""
+    if store is None:
+        return {}
+    traces = {
+        "orchestrator_trace": store.get(RAW_TRACE_KEY),
+        "subagent_traces": store.get(SUBAGENT_TRACES_KEY),
+    }
+    return {key: value for key, value in traces.items() if value is not None}
 
 
 def _role(message: Any) -> str:
@@ -993,11 +1005,59 @@ def _raw_turns(sample: Any) -> list[dict[str, Any]]:
     return turns
 
 
+def render_orchestrator_trace(entries: list[dict[str, Any]]) -> str:
+    """The top-level agent's tool calls, delegations included, one block per call.
+
+    A delegation's block names the A2A state of its reply and its task id.
+    """
+    blocks: list[str] = []
+    for entry in entries:
+        artifact = entry.get("artifact") or {}
+        lines = [f"======== step {entry.get('step')} | {entry.get('role', 'domain')} | {entry.get('name')} ========"]
+        lines.append(f"parameters:\n{_pretty(entry.get('input'))}")
+        if artifact:
+            lines.append(f"[a2a {artifact.get('state')} | task {artifact.get('task_id')}]")
+        if entry.get("error_message"):
+            lines.append(f"[error] {entry['error_message']}")
+        lines.append(f"[result]\n{_pretty(entry.get('output'))}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def render_subagent_traces(traces: dict[str, dict[str, Any]]) -> str:
+    """Each sub-agent's conversation, turn-marked like ``render_transcript``."""
+    blocks: list[str] = []
+    for slug, trace in traces.items():
+        lines = [f"######## {slug}: {trace.get('name', slug)} ########"]
+        messages = trace.get("messages") or []
+        if not messages:
+            lines.append("(not asked)")
+        for index, turn in enumerate(messages, 1):
+            role = turn.get("role", "message")
+            if role == "tool":
+                lines.append(f"======== turn {index} | tool | {turn.get('name')} ========\n{turn.get('text', '')}")
+                continue
+            lines.append(f"======== turn {index} | {role} ========")
+            if turn.get("text"):
+                lines.append(turn["text"])
+            for call in turn.get("tool_calls") or []:
+                lines.append(f"[call {call.get('name')}]\nparameters:\n{_pretty(call.get('args'))}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
 def raw_trace(sample: Any) -> str:
-    """JSON of the conversation turns and the tool-call trace from the sample store."""
-    payload = {
+    """JSON of the conversation turns and the tool-call trace from the sample store.
+
+    A multi-agent run adds the top-level agent's own calls (``orchestrator_trace``,
+    delegations included) and each sub-agent's trace (``subagent_traces``);
+    ``tool_trace`` stays the scored, domain-only trace.
+    """
+    store = getattr(sample, "store", None)
+    payload: dict[str, Any] = {
         "turns": _raw_turns(sample),
-        "tool_trace": _trace_entries(getattr(sample, "store", None)),
+        "tool_trace": _trace_entries(store),
+        **_agent_traces(store),
     }
     return json.dumps(payload, default=str, ensure_ascii=False, indent=2)
 
@@ -1153,16 +1213,25 @@ def sample_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+_AGENT_TRACE_COLUMNS = ("orchestrator_trace", "subagent_traces")
+
+
 def trace_table_columns(rows: list[dict[str, Any]]) -> tuple[str, ...]:
-    """Shared fields and this benchmark's metrics, then the trace texts, then each judge."""
+    """Shared fields and this benchmark's metrics, then the trace texts, then each judge.
+
+    A multi-agent run adds ``orchestrator_trace`` and ``subagent_traces`` after
+    ``raw_trace``.
+    """
+    texts = ("target", "raw_trace")
     keys: list[str] = []
     for row in rows:
         for key in row:
-            if key not in keys and key not in ("target", "raw_trace", "readable_trace"):
+            if key not in keys and key not in texts + _AGENT_TRACE_COLUMNS:
                 keys.append(key)
     body = [key for key in keys if not _is_judge_column(key)]
     judges = [key for key in keys if _is_judge_column(key)]
-    return tuple(body + ["target", "raw_trace", "readable_trace"] + judges)
+    agents = [key for key in _AGENT_TRACE_COLUMNS if any(key in row for row in rows)]
+    return tuple(body + list(texts) + agents + judges)
 
 
 _TRACE_TEXT = frozenset(
@@ -1175,7 +1244,8 @@ _TRACE_TEXT = frozenset(
         "tool_trace",
         "target",
         "raw_trace",
-        "readable_trace",
+        "orchestrator_trace",
+        "subagent_traces",
     }
 )
 
@@ -1204,15 +1274,20 @@ def _trace_value(column: str, value: Any) -> Any:
 def example_trace_rows(samples: list[Any] | None) -> list[dict[str, Any]]:
     """One row per sample: the samples-table fields, plus target and both traces.
 
-    ``readable_trace`` is the turn-marked conversation. ``raw_trace`` is the
-    same turns and the store's tool calls as JSON.
+    ``raw_trace`` is the turns and the store's tool calls as JSON; the
+    turn-marked conversation is ``transcript`` in the samples table. A multi-agent run adds
+    ``orchestrator_trace`` and ``subagent_traces`` as readable text.
     """
     rows: list[dict[str, Any]] = []
     for sample, base in zip(samples or [], sample_rows(samples), strict=True):
         row = dict(base)
         row["target"] = sample_target(sample)
         row["raw_trace"] = raw_trace(sample)
-        row["readable_trace"] = row["transcript"]
+        agents = _agent_traces(getattr(sample, "store", None))
+        if "orchestrator_trace" in agents:
+            row["orchestrator_trace"] = render_orchestrator_trace(agents["orchestrator_trace"])
+        if "subagent_traces" in agents:
+            row["subagent_traces"] = render_subagent_traces(agents["subagent_traces"])
         rows.append(row)
     return rows
 

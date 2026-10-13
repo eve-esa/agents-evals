@@ -1,0 +1,406 @@
+{
+  "embedding_model": "qwen/qwen3-embedding-4b",
+  "algorithm": "kmeans",
+  "k": 7,
+  "tools": {
+    "analyze_raster_overlap": "bf7f5190beba3de4",
+    "calculate_column_statistics": "97bfc6af3f8242b4",
+    "calculate_columns": "79ca3728b16ee735",
+    "calculate_line_lengths": "7d77cdad6b9768d7",
+    "create_buffer": "940624f2baf3075c",
+    "filter_categorical": "8c15aa8a671a7839",
+    "filter_numerical": "dc5637f66455d22c",
+    "filter_points_by_raster_values": "a3ea0f875bac7a0a",
+    "generate_contours_display": "efc8114496307e80",
+    "get_centroids": "981bf9c4042d92c0",
+    "get_raster_description": "513eac3324be71f7",
+    "get_raster_path": "f9881f3b81859bef",
+    "get_unique_values": "31b276b2bf3dd815",
+    "get_values_from_raster_with_geometries": "fa482a8f69c15c4e",
+    "load_data": "6ebdf5b48b51ac59",
+    "load_geodata": "a4b823e4a05b75fb",
+    "make_bivariate_map": "d819def16a627d36",
+    "make_choropleth_map": "d0f9772657ef4c03",
+    "make_heatmap": "e3ae6177b5c732d5",
+    "merge_dataframes": "863ac7bfc1e912b1",
+    "reject_task": "c97b37b709102d2d",
+    "scale_column_by_value": "8d0b6ff4e55d1b4e",
+    "select_features_by_spatial_relationship": "ac733f0a9f06e076",
+    "visualize_geographies": "c471e022190c26ff"
+  },
+  "specialists": [
+    {
+      "slug": "raster_analysis",
+      "name": "Raster Analysis Agent",
+      "description": "Specializes in raster data analysis tasks including overlap statistics, metadata retrieval, and geospatial masking operations.",
+      "tools": [
+        "analyze_raster_overlap",
+        "get_raster_description",
+        "get_raster_path",
+        "get_values_from_raster_with_geometries"
+      ],
+      "skills": [
+        {
+          "id": "analyze_raster_overlap",
+          "name": "Analyze raster overlap",
+          "description": "Calculate statistical metrics (total, min, max, mean, standard deviation) for overlapping pixel areas between two raster datasets using specified resampling methods.",
+          "tags": [
+            "raster overlap",
+            "spatial statistics",
+            "resampling analysis"
+          ],
+          "examples": [
+            "Analyze overlap between data/scene_B4.tif and data/scene_B5.tif with bilinear resampling, output variable 'overlap_stats'",
+            "Calculate statistics for overlapping pixels in data/precipitation.tif and data/landcover.tif using cubic resampling"
+          ],
+          "tools": [
+            "analyze_raster_overlap"
+          ]
+        },
+        {
+          "id": "get_raster_metadata",
+          "name": "Get raster metadata",
+          "description": "Retrieve dataset metadata (dimensions, CRS, data type) and basic statistics (valid pixels, min/max) for a specified raster file.",
+          "tags": [
+            "raster metadata",
+            "dataset description",
+            "geospatial properties"
+          ],
+          "examples": [
+            "Get metadata for data/elevation.tif",
+            "Show basic statistics of data/temperature_2023.tif"
+          ],
+          "tools": [
+            "get_raster_description"
+          ]
+        },
+        {
+          "id": "extract_raster_values",
+          "name": "Extract raster values with geometries",
+          "description": "Mask a raster using vector geometries from a GeoDataFrame and calculate zonal statistics for the masked area.",
+          "tags": [
+            "raster masking",
+            "zonal statistics",
+            "geospatial extraction"
+          ],
+          "examples": [
+            "Extract values from data/soil_moisture.tif using geometries in 'study_area.geojson', output variable 'masked_stats'",
+            "Calculate mean and standard deviation for raster data within administrative boundaries in data/boundaries.gpkg"
+          ],
+          "tools": [
+            "get_values_from_raster_with_geometries"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist for raster data analysis tasks. You handle overlap analysis, metadata extraction, and geospatial masking operations. If a request involves vector data manipulation, tabular statistics, or visualization tasks, decline it and suggest the appropriate agent.\n\n## Required inputs\nFor overlap analysis: two raster file paths, output variable name, resampling methods for both rasters. For metadata retrieval: a single raster path. For geospatial masking: a raster path, GeoDataFrame name, and output variable. Always verify input paths exist in the catalog before proceeding.\n\n## How to work\n1. Use get_raster_path to resolve any catalog references to actual file paths. 2. Execute the requested analysis using the appropriate tool. 3. Validate outputs: check for empty results and retry with adjusted parameters if needed. For overlap analysis, verify both rasters have matching dimensions after resampling. For masking, ensure geometries intersect the raster extent.\n\n## What to report\nFor overlap analysis: total, min, max, mean, standard deviation, and count of overlapping pixels. For metadata: driver, dimensions, CRS, data type, and basic statistics. For masking: zonal statistics with units matching the input raster. Report any missing files or incompatible inputs explicitly."
+    },
+    {
+      "slug": "data_statistics",
+      "name": "Data Statistics Agent",
+      "description": "Loads datasets into dataframes and calculates numerical column statistics for statistical analysis.",
+      "tools": [
+        "calculate_column_statistics",
+        "load_data"
+      ],
+      "skills": [
+        {
+          "id": "load_dataset",
+          "name": "Load statistical dataset",
+          "description": "Loads a dataset from the DATA_CATALOG into a Pandas DataFrame, returning the dataframe name, entry count, column names, and null value counts.",
+          "tags": [
+            "data loading",
+            "dataset description"
+          ],
+          "examples": [
+            "Load the 'climate_data' dataset into a DataFrame named 'climate_df'",
+            "Load the 'population_2023' dataset into a DataFrame called 'pop_data'"
+          ],
+          "tools": [
+            "load_data"
+          ]
+        },
+        {
+          "id": "calculate_column_stats",
+          "name": "Calculate column statistics",
+          "description": "Computes summary statistics (count, min/max, mean, standard deviation, quantiles) for a numerical column in a DataFrame. Requires specifying include_quantiles and optional additional_quantiles.",
+          "tags": [
+            "column statistics",
+            "data summary"
+          ],
+          "examples": [
+            "Calculate statistics for the 'temperature' column in 'climate_df', output to 'temp_stats', include quantiles and additional_quantiles [0.1, 0.9]",
+            "Compute stats for 'population' in 'pop_data', output to 'pop_stats', include quantiles"
+          ],
+          "tools": [
+            "calculate_column_statistics"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou handle data loading and numerical column analysis. If a request involves spatial operations, raster processing, or visualization, decline it and suggest the appropriate agent.\n\n## Required inputs\nFor dataset loading: dataset name and output dataframe name. For column statistics: dataframe name, column name, output variable name, and include_quantiles flag. Check these in order before executing tools.\n\n## How to work\n1. Use load_data first to create the dataframe. 2. Verify the column exists and is numerical before calling calculate_column_statistics. 3. If loading fails, report the error. If the column is non-numeric, fail the request. 4. Always return all calculated statistics and output variable names.\n\n## What to report\nFor loading: dataframe name, entry count, column names, and null value counts. For statistics: count (total/valid/missing), min/max, mean, standard deviation, and quantile values. Report failures explicitly with error messages."
+    },
+    {
+      "slug": "dataframe_manipulation",
+      "name": "DataFrame Manipulation Agent",
+      "description": "Performs mathematical operations on columns and merges statistical/geospatial dataframes using key columns.",
+      "tools": [
+        "calculate_columns",
+        "merge_dataframes",
+        "scale_column_by_value"
+      ],
+      "skills": [
+        {
+          "id": "calculate_columns",
+          "name": "Perform column arithmetic",
+          "description": "Executes mathematical operations (add, subtract, multiply, divide) between columns in one or two dataframes, returning a new dataframe with the result column.",
+          "tags": [
+            "column math",
+            "dataframe operations",
+            "value transformations"
+          ],
+          "examples": [
+            "Calculate the ratio of column 'population' in dataframes/data_pop.csv and 'area' in dataframes/data_area.csv, output as 'density' in dataframes/output_df",
+            "Add columns 'income' and 'bonus' from dataframe1 dataframes/finances.csv to create 'total_income' in dataframe2 dataframes/employees.csv"
+          ],
+          "tools": [
+            "calculate_columns"
+          ]
+        },
+        {
+          "id": "merge_stat_geo_data",
+          "name": "Merge statistical and geospatial data",
+          "description": "Combines statistical dataframes with geospatial dataframes using specified key columns, preserving all geospatial rows and matching statistical data where possible.",
+          "tags": [
+            "data merging",
+            "geospatial join",
+            "attribute linking"
+          ],
+          "examples": [
+            "Merge statistical data dataframes/stat_data.csv (key: 'region_id') with geospatial data dataframes/geo_data.gpkg (key: 'area_code') to create merged_dataframes/combined.gpkg",
+            "Join population statistics dataframes/population.csv with administrative boundaries dataframes/boundaries.gpkg using 'district_name' as the common key"
+          ],
+          "tools": [
+            "merge_dataframes"
+          ]
+        },
+        {
+          "id": "scale_column_values",
+          "name": "Scale column by numeric value",
+          "description": "Applies a mathematical operation (multiply, divide, add, subtract) between a column and a specified numeric value, returning a new dataframe with the transformed column.",
+          "tags": [
+            "value scaling",
+            "column normalization",
+            "unit conversion"
+          ],
+          "examples": [
+            "Multiply the 'price' column in dataframes/prices.csv by 1.15 to create 'adjusted_price' in dataframes/adjusted_prices.csv",
+            "Convert 'elevation' values in dataframes/terrain.csv from meters to kilometers by dividing by 1000"
+          ],
+          "tools": [
+            "scale_column_by_value"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou specialize in dataframe manipulation tasks: merging statistical/geospatial data, performing column arithmetic, and scaling values. Decline requests involving raster operations, spatial analysis, or data visualization, as these are handled by other agents.\n\n## Required inputs\nFor column operations: source dataframe paths, column names, operation type, and output specifications. For merges: statistical and geospatial dataframe paths, key columns, and output name. For scaling: dataframe path, column name, operation, value, and output name.\n\n## How to work\n1. Validate all required inputs are present before executing any tool. 2. Use calculate_columns for cross-column math, merge_dataframes for joining datasets, and scale_column_by_value for value transformations. 3. Verify output dataframes contain expected columns and values. 4. If a tool returns an empty result, check input parameters and retry with adjusted values if appropriate.\n\n## What to report\nReport new dataframes with their paths, transformed columns with units, and any merge statistics (e.g., '123 of 150 geospatial rows matched'). Clearly indicate failures like missing keys or incompatible data types."
+    },
+    {
+      "slug": "geospatial_vector_analyst",
+      "name": "Geospatial Vector Analyst Agent",
+      "description": "Performs geospatial analysis on vector data, including buffering, length calculations, and spatial filtering of features.",
+      "tools": [
+        "calculate_line_lengths",
+        "create_buffer",
+        "filter_points_by_raster_values",
+        "generate_contours_display",
+        "get_centroids",
+        "load_geodata",
+        "select_features_by_spatial_relationship"
+      ],
+      "skills": [
+        {
+          "id": "buffer_and_length",
+          "name": "Create buffers and calculate line lengths",
+          "description": "Generates buffer zones around geometries and computes total lengths of line features in kilometers using UTM projections.",
+          "tags": [
+            "buffer creation",
+            "line length calculation",
+            "geospatial analysis"
+          ],
+          "examples": [
+            "Create a 500m buffer around roads in data/roads.gpkg and calculate their total length",
+            "Buffer waterways in data/water.gdf by 200m and report total length in km"
+          ],
+          "tools": [
+            "create_buffer",
+            "calculate_line_lengths"
+          ]
+        },
+        {
+          "id": "raster_point_filter",
+          "name": "Filter points by raster values",
+          "description": "Samples raster values at point locations and filters points based on threshold conditions (e.g., elevation > 100m).",
+          "tags": [
+            "raster filtering",
+            "point selection",
+            "threshold analysis"
+          ],
+          "examples": [
+            "Filter data/points.gdf by raster data/elevation.tif where values are between 50 and 150",
+            "Select points in data/sites.gpkg where temperature raster exceeds 25\u00b0C"
+          ],
+          "tools": [
+            "filter_points_by_raster_values"
+          ]
+        },
+        {
+          "id": "spatial_relationship_filter",
+          "name": "Select features by spatial relationships",
+          "description": "Filters features based on spatial predicates (e.g., intersect, within) between two GeoDataFrames.",
+          "tags": [
+            "spatial selection",
+            "predicate filtering",
+            "geospatial query"
+          ],
+          "examples": [
+            "Select data/parcels.gdf features that intersect with data/protected_areas.gpkg",
+            "Find data/buildings.gdf features within 1km of data/roads.gdf"
+          ],
+          "tools": [
+            "select_features_by_spatial_relationship"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a geospatial analyst specializing in vector data manipulation. You handle buffering, length calculations, and spatial filtering tasks. If a request involves raster analysis (e.g., contour generation) or statistical operations, decline it and suggest the appropriate agent.\n\n## Required inputs\nFor buffer creation: GeoDataFrame name, buffer size in meters, and output name. For line length calculation: GeoDataFrame name and output variable name. For point filtering: raster path, GeoDataFrame name, value column, filter thresholds, and output name. For spatial selection: source and reference GeoDataFrame names, spatial predicates, and output name.\n\n## How to work\n1. Validate inputs (e.g., check GeoDataFrame existence). 2. Execute tools in sequence (e.g., buffer before length calculation). 3. For spatial filtering, ensure predicates are valid (e.g., 'intersects', 'within'). 4. If a tool returns no results, retry with adjusted parameters (e.g., larger buffer) and document changes.\n\n## What to report\nReturn GeoDataFrame names, row counts, and key attributes (e.g., total length in km). Include error messages for invalid inputs or failed operations. For spatial selection, report the number of features meeting each predicate."
+    },
+    {
+      "slug": "dataframe_filter",
+      "name": "Dataframe Filter Agent",
+      "description": "Specializes in filtering and extracting unique values from DataFrames and GeoDataFrames based on categorical or numerical criteria.",
+      "tools": [
+        "filter_categorical",
+        "filter_numerical",
+        "get_unique_values"
+      ],
+      "skills": [
+        {
+          "id": "filter_categorical_values",
+          "name": "Filter by categorical values",
+          "description": "Filters a DataFrame/GeoDataFrame by specified categorical values in one or more columns, such as country, subregion, or continent. Requires the input dataframe name, a dictionary of column-value filters, and the name of the output dataframe.",
+          "tags": [
+            "dataframe filtering",
+            "categorical data",
+            "geospatial filtering"
+          ],
+          "examples": [
+            "Filter the dataframe 'data/df_countries' by continent 'Europe' and output to 'filtered_df_europe'",
+            "Select rows in 'data/df_regions' where 'subregion' is 'Southern Europe' and 'country' is 'Italy', output to 'filtered_df_italy'"
+          ]
+        },
+        {
+          "id": "filter_by_numerical_conditions",
+          "name": "Filter by numerical conditions",
+          "description": "Filters a DataFrame/GeoDataFrame using numerical conditions expressed as a query string (e.g., 'col1 > 25 and col2 < 100'). Requires the input dataframe name, a query string, and the name of the output dataframe.",
+          "tags": [
+            "dataframe filtering",
+            "numerical data",
+            "query conditions"
+          ],
+          "examples": [
+            "Filter 'data/df_population' where 'population' > 10000000 and 'area' < 500000, output to 'filtered_df_large_population'",
+            "Apply the condition 'gdp_per_capita > 20000' to 'data/df_economics' and save the result as 'filtered_df_high_gdp'"
+          ]
+        },
+        {
+          "id": "extract_unique_values",
+          "name": "Extract unique values from a column",
+          "description": "Extracts and returns the unique values from a specified column in a DataFrame/GeoDataFrame. Useful for understanding the available categories or clarifying the spelling of names in a column.",
+          "tags": [
+            "unique values",
+            "dataframe inspection",
+            "column analysis"
+          ],
+          "examples": [
+            "Get unique values from the 'country' column in 'data/df_countries'",
+            "List all unique 'subregion' names in the 'data/df_geography' dataframe"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist in filtering and analyzing DataFrames and GeoDataFrames. You can filter by categorical or numerical conditions and extract unique values from columns. If a request involves raster data, spatial operations, or data visualization, it is out of your scope. In such cases, inform the user that another agent should handle it.\n\n## Required inputs\nFor a categorical filter, you need the name of the input dataframe, a dictionary of column-value filters, and the name of the output dataframe. For a numerical filter, you need the input dataframe name, a query string with numerical conditions, and the output dataframe name. For extracting unique values, you need the input dataframe name and the column name from which to extract the values.\n\n## How to work\nUse the `filter_categorical` tool to apply categorical filters, ensuring the column names and values match the input dataframe. Use the `filter_numerical` tool to apply query-based numerical conditions. Use the `get_unique_values` tool to list all unique values in a column. Always verify the output dataframe or unique values list. If the result is empty or the call fails, try adjusting the filters or conditions and re-run the tool.\n\n## What to report\nReport the resulting filtered dataframe or the list of unique values, including the column name and the count of unique entries. If no results are found or an error occurs, clearly state the issue and suggest possible adjustments to the input criteria."
+    },
+    {
+      "slug": "map_visualization",
+      "name": "Map Visualization Agent",
+      "description": "Specializes in creating various types of map visualizations from geospatial data, including choropleth, bivariate, and heatmap maps.",
+      "tools": [
+        "make_bivariate_map",
+        "make_choropleth_map",
+        "make_heatmap",
+        "visualize_geographies"
+      ],
+      "skills": [
+        {
+          "id": "create_choropleth_map",
+          "name": "Create choropleth map",
+          "description": "Generates a choropleth map from a GeoDataFrame column, using a specified colormap and mapping key. Requires a dataframe name, mapping key, legend text, and colormap.",
+          "tags": [
+            "choropleth map",
+            "geospatial visualization"
+          ],
+          "examples": [
+            "Create a choropleth map from data/regions.gdf, using column 'population', with a 'viridis' colormap and legend text 'Population Density'."
+          ]
+        },
+        {
+          "id": "create_bivariate_map",
+          "name": "Create bivariate map",
+          "description": "Generates a bivariate choropleth map to show the relationship between two variables in a GeoDataFrame. Requires two variables, their names, a title, and an output variable name.",
+          "tags": [
+            "bivariate map",
+            "geospatial analysis"
+          ],
+          "examples": [
+            "Make a bivariate map from data/regions.gdf, using variables 'population' and 'income', with titles 'Population' and 'Income', and output variable 'bivariate_map'."
+          ]
+        },
+        {
+          "id": "create_heatmap",
+          "name": "Create heatmap",
+          "description": "Generates an interactive heatmap from point data in a GeoDataFrame, with intensity based on a specified column. Requires a GeoDataFrame name, value column, center coordinates, zoom level, radius, map style, and dimensions.",
+          "tags": [
+            "heatmap",
+            "point data visualization"
+          ],
+          "examples": [
+            "Make a heatmap from data/incidents.gdf, using column 'count', centered at 40.7128, -74.0060, with zoom level 10, radius 1000, 'light' map style, and size 800x600."
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a map visualization specialist. You create choropleth, bivariate, and heatmap maps from geospatial data. If a request involves raster analysis, data loading, or spatial filtering, it is out of scope and should be handled by another agent.\n\n## Required inputs\nFor choropleth maps: a GeoDataFrame name, a mapping key, legend text, and a colormap. For bivariate maps: a GeoDataFrame name, two variables, their names, a title, and an output variable name. For heatmaps: a GeoDataFrame name, a value column, center coordinates, zoom level, radius, map style, and dimensions.\n\n## How to work\nUse the appropriate tool for each request. For choropleth maps, use make_choropleth_map. For bivariate maps, use make_bivariate_map. For heatmaps, use make_heatmap. Always verify that the required inputs are present and in the correct format before proceeding. If a tool call fails or returns no output, try adjusting the parameters or check the input data for issues.\n\n## What to report\nReport the generated map visualizations, including any relevant output variable names. If a visualization cannot be created due to missing or incorrect inputs, explain the issue and suggest corrections."
+    },
+    {
+      "slug": "reject_task",
+      "name": "Reject Task Agent",
+      "description": "Handles tasks that cannot be solved with available tools or datasets by returning standardized rejection messages.",
+      "tools": [
+        "reject_task"
+      ],
+      "skills": [
+        {
+          "id": "reject_unsolvable_tasks",
+          "name": "Reject unsolvable tasks",
+          "description": "Uses the reject_task tool to decline requests that cannot be addressed by any available agents, datasets, or tools in the system.",
+          "tags": [
+            "task rejection",
+            "unsolvable tasks"
+          ],
+          "examples": [
+            "Process a 3D geological model using specialized software not available here",
+            "Generate a report in a specific format not supported by existing tools",
+            "Analyze data from a sensor type not covered by current datasets"
+          ]
+        }
+      ],
+      "role_prompt": "## Role and scope\nYou are a specialist for rejecting tasks that cannot be solved with available tools or datasets. You decline requests that fall outside the capabilities of the system and direct users to what is possible. If a task could be handled by another agent (e.g., raster analysis, geospatial operations, data filtering), you must state that explicitly and suggest the appropriate agent.\n\n## Required inputs\nEvery request must clearly state the task and why it cannot be handled by existing agents. You must verify that the task does not match any of the covered skills in other agents (e.g., raster processing, statistical analysis, geospatial operations) before using the reject_task tool.\n\n## How to work\n1. Check if the task matches any of the covered skills in other agents. 2. If not, call the reject_task tool with a message explaining why the task cannot be solved. 3. If the request is ambiguous, ask for clarification before deciding. 4. Never attempt to solve tasks outside your scope by making assumptions about tools or data.\n\n## What to report\nReturn a standardized rejection message using the reject_task tool, including: - A clear statement that the task cannot be solved - The specific reason (e.g., 'No available tool for 3D geological modeling') - Suggestions for alternative approaches if applicable"
+    }
+  ],
+  "describer_model": "qwen/qwen3-32b"
+}

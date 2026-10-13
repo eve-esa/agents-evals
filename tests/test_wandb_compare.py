@@ -232,7 +232,6 @@ def test_sample_trace_table() -> None:
         *SAMPLE_COLUMNS,
         "target",
         "raw_trace",
-        "readable_trace",
         "deepseek/deepseek-v3.2/match",
         "deepseek/deepseek-v3.2/output",
         "qwen/qwen3.8-27b/match",
@@ -242,18 +241,17 @@ def test_sample_trace_table() -> None:
     assert traces[0]["target"] == sample_target(sample)
     assert "reference 1" in traces[0]["target"]
     assert "get_osm_data" in traces[0]["target"]
-    assert traces[0]["readable_trace"] == rows[0]["transcript"]
     assert (
-        "======== turn 3 | tool | get_osm_data ========" in traces[0]["readable_trace"]
+        "======== turn 3 | tool | get_osm_data ========" in rows[0]["transcript"]
     )
     parsed = json.loads(traces[0]["raw_trace"])
     assert parsed["tool_trace"][0]["name"] == "get_osm_data"
     assert parsed["turns"][1]["tool_calls"][0]["arguments"] == {"place": "Rome"}
     assert raw_trace(sample) == traces[0]["raw_trace"]
-    assert _trace_dtype("readable_trace") is str
+    assert _trace_dtype("transcript") is str
     assert _trace_dtype("n_tool_calls") is int
     assert _trace_dtype("tao") is float
-    assert _trace_value("readable_trace", None) == ""
+    assert _trace_value("transcript", None) == ""
     assert _trace_value("tao", None) is None
     assert rows[0]["tao"] == 1.0
     assert rows[0]["match"] == 2
@@ -435,7 +433,7 @@ def test_openearthagent_trace_table_uses_its_own_metrics() -> None:
     assert rows[0]["deepseek-v3.2/summ"] == -1.0
     assert rows[0]["gpt-6-luna/summ"] == 0.5
     assert rows[0]["n_tool_calls"] == 0
-    assert "sample_id" in columns and "readable_trace" in columns
+    assert "sample_id" in columns and "transcript" in columns
 
 
 def test_openearthagent_panel_keeps_one_tool_score_and_four_summ_keys() -> None:
@@ -606,3 +604,51 @@ def test_sample_end_records_fill_an_empty_task_log() -> None:
     assert samples_for_table([], collected) == collected
     logged = [SimpleNamespace(id="from-log")]
     assert samples_for_table(logged, []) == logged
+
+
+def test_a2a_traces_get_their_own_columns_and_artifact_fields():
+    from agentic_evals.agents.trace_callback import RAW_TRACE_KEY, SUBAGENT_TRACES_KEY
+    from agentic_evals.wandb_compare import trace_records
+
+    delegation = {"agent": "veg", "task_id": "t1", "context_id": "c1", "state": "completed"}
+    sample = SimpleNamespace(
+        id="1",
+        epoch=1,
+        input="NDVI?",
+        target="0.42",
+        metadata={},
+        scores={},
+        output=SimpleNamespace(completion="0.42"),
+        messages=[SimpleNamespace(role="user", text="NDVI?", content="NDVI?", tool_calls=None)],
+        store={
+            TRACE_KEY: [{"step": 1, "agent": "veg", "name": "calc_ndvi", "input": {}, "output": "0.42"}],
+            RAW_TRACE_KEY: [
+                {"step": 1, "role": "peer", "name": "ask_veg", "input": {"request": "NDVI"},
+                 "output": "0.42", "artifact": delegation},
+            ],
+            SUBAGENT_TRACES_KEY: {
+                "veg": {
+                    "name": "Veg Agent",
+                    "messages": [
+                        {"role": "human", "text": "NDVI"},
+                        {"role": "ai", "text": "", "tool_calls": [{"name": "calc_ndvi", "args": {"b": 4}}]},
+                        {"role": "tool", "name": "calc_ndvi", "text": "0.42"},
+                    ],
+                },
+                "ts": {"name": "TS Agent", "messages": []},
+            },
+        },
+    )
+    (row,) = example_trace_rows([sample])
+    assert trace_table_columns([row])[-2:] == ("orchestrator_trace", "subagent_traces")
+    assert "======== step 1 | peer | ask_veg ========" in row["orchestrator_trace"]
+    assert "[a2a completed | task t1]" in row["orchestrator_trace"]
+    assert "######## veg: Veg Agent ########" in row["subagent_traces"]
+    assert "[call calc_ndvi]" in row["subagent_traces"]
+    assert "======== turn 3 | tool | calc_ndvi ========\n0.42" in row["subagent_traces"]
+    assert "######## ts: TS Agent ########\n(not asked)" in row["subagent_traces"]
+    assert _trace_dtype("orchestrator_trace") is str and _trace_dtype("subagent_traces") is str
+    assert set(json.loads(row["raw_trace"])) == {"turns", "tool_trace", "orchestrator_trace", "subagent_traces"}
+    (record,) = trace_records([sample])
+    assert record["orchestrator_trace"][0]["artifact"] == delegation
+    assert list(record["subagent_traces"]) == ["veg", "ts"]
