@@ -10,15 +10,18 @@ the orchestrator. ``contextId`` is the sub-agent's
 The reply is a completed task with one text artifact, a failed task with the
 error, or, when the sub-agent answers ``NEEDS_INPUT: ...``, an
 ``input-required`` task whose status message says what is missing (spec 4.1.3).
-The A2A ``taskId`` goes into the sub-agent run's metadata (``a2a_task_id``), so
-every tool call it records names the task that caused it.
+The sub-agent run gets the request's metadata as LangChain run metadata: the A2A
+``taskId`` (``a2a_task_id``), so every tool call it records names the task that
+caused it, and the message's own metadata, such as the caller's tool run id
+(``caller_run_id``) that the Weave trace nests the run under.
 
 Client side, the orchestrator resolves each specialist's AgentCard over HTTP
 and gets one tool per card. Its description is the card's description and
 skills (name, description, first example). The tool sends ``SendMessage`` and
 returns the reply text, with ``{agent, task_id, context_id, state}`` as the
 ToolMessage artifact; it is tagged with the ``peer`` role, so domain traces
-leave it out (``agents.trace_callback``). After an ``input-required`` reply, the next message
+leave it out (``agents.trace_callback``). The message carries the tool's LangChain
+run id as ``caller_run_id``. After an ``input-required`` reply, the next message
 carries the same ``taskId`` and ``contextId``, so the task continues (spec
 3.4.3). A transport error is returned as text; it never aborts the sample.
 """
@@ -60,12 +63,14 @@ from a2a.types import (
     SendMessageRequest,
     TaskState,
 )
+from google.protobuf.json_format import MessageToDict
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 from starlette.applications import Starlette
 
 from agentic_evals.agents.trace_callback import ROLE_METADATA_KEY
+from agentic_evals.agents.weave_trace import CALLER_RUN_ID
 
 HOST = "127.0.0.1"
 RPC_PATH = "/"
@@ -78,8 +83,8 @@ _SKILL_FIELDS = ("id", "name", "description", "tags", "examples")
 
 PEER = "peer"
 
-# (request text, context id, task id) -> reply text
-RunSubAgent = Callable[[str, str, str], Any]
+# (request text, context id, run metadata) -> reply text
+RunSubAgent = Callable[[str, str, dict[str, Any]], Any]
 
 
 class SubAgentExecutor(AgentExecutor):
@@ -95,7 +100,7 @@ class SubAgentExecutor(AgentExecutor):
         updater = TaskUpdater(event_queue, task_id, context_id)
         await updater.start_work()
         try:
-            coro = self.run(context.get_user_input(), context_id, task_id)
+            coro = self.run(context.get_user_input(), context_id, _run_metadata(context))
             context_copy = self.sample_context.copy() if self.sample_context is not None else None
             reply = (await asyncio.create_task(coro, context=context_copy) or "").strip()
             if reply.startswith(NEEDS_INPUT):
@@ -113,18 +118,25 @@ class SubAgentExecutor(AgentExecutor):
         await TaskUpdater(event_queue, context.task_id, context.context_id).cancel()
 
 
+def _run_metadata(context: RequestContext) -> dict[str, Any]:
+    """The A2A task id, plus the metadata the request's message carried."""
+    message = context.message
+    sent = MessageToDict(message.metadata) if message is not None and message.HasField("metadata") else {}
+    return {**sent, "a2a_task_id": context.task_id}
+
+
 def langgraph_runner(graph: Any, callbacks: list[Any], recursion_limit: int) -> RunSubAgent:
     """``RunSubAgent`` for a ``create_agent`` graph compiled with a checkpointer."""
     from agentic_evals.agents.langgraph_react import _last_ai_text
 
-    async def run(text: str, context_id: str, task_id: str) -> str:
+    async def run(text: str, context_id: str, metadata: dict[str, Any]) -> str:
         result = await graph.ainvoke(
             {"messages": [HumanMessage(content=text)]},
             config={
                 "recursion_limit": recursion_limit,
                 "callbacks": callbacks,
                 "configurable": {"thread_id": context_id},
-                "metadata": {"a2a_task_id": task_id},
+                "metadata": metadata,
             },
         )
         return _last_ai_text(list(result.get("messages") or []))
@@ -159,8 +171,15 @@ def agent_card(name: str, description: str, skills: list[dict[str, Any]], url: s
 async def serve(
     agents: dict[str, tuple[AgentExecutor, Callable[[str], AgentCard]]],
 ) -> AsyncIterator[dict[str, str]]:
-    """Serve each ``name: (executor, card(url))`` on a free localhost port; yield ``{name: url}``."""
+    """Serve each ``name: (executor, card(url))`` on a free localhost port; yield ``{name: url}``.
+
+    On exit each handler is closed before its server stops. ``aclose`` drains the
+    SDK's per-task background loops (the ASGI lifespan would call it; ours is off);
+    left pending, they are destroyed at shutdown and the SDK's OpenTelemetry spans
+    fail to detach.
+    """
     running: list[tuple[uvicorn.Server, asyncio.Task]] = []
+    handlers: list[DefaultRequestHandler] = []
     urls: dict[str, str] = {}
     try:
         for name, (executor, card_for) in agents.items():
@@ -170,6 +189,7 @@ async def serve(
             url = f"http://{HOST}:{sock.getsockname()[1]}"
             card = card_for(url)
             handler = DefaultRequestHandler(agent_executor=executor, task_store=InMemoryTaskStore(), agent_card=card)
+            handlers.append(handler)
             app = Starlette(routes=[*create_agent_card_routes(card), *create_jsonrpc_routes(handler, rpc_url=RPC_PATH)])
             server = uvicorn.Server(uvicorn.Config(app, log_level="warning", lifespan="off"))
             task = asyncio.create_task(server.serve(sockets=[sock]))
@@ -182,6 +202,7 @@ async def serve(
             urls[name] = url
         yield urls
     finally:
+        await asyncio.gather(*(handler.aclose() for handler in handlers), return_exceptions=True)
         for server, _ in running:
             server.should_exit = True
         await asyncio.gather(*(task for _, task in running), return_exceptions=True)
@@ -235,10 +256,14 @@ def _ask_tool(name: str, card: AgentCard, client: Any) -> BaseTool:
     # One A2A context per specialist for the sample; ``task`` is set only while a task waits for input.
     ids: dict[str, str | None] = {"context": None, "task": None}
 
-    async def ask(request: str) -> tuple[str, dict[str, Any]]:
+    async def ask(request: str, callbacks: Any = None) -> tuple[str, dict[str, Any]]:
         message = new_message(
             [new_text_part(request)], context_id=ids["context"], task_id=ids["task"], role=Role.ROLE_USER
         )
+        # LangChain passes this tool run's child manager; its parent is the tool run.
+        caller = getattr(callbacks, "parent_run_id", None)
+        if caller is not None:
+            message.metadata.update({CALLER_RUN_ID: str(caller)})
         send = SendMessageRequest(message=message, configuration=SendMessageConfiguration(return_immediately=False))
         reply = ""
         sent = {"agent": name, "task_id": ids["task"], "context_id": ids["context"], "state": None}

@@ -49,6 +49,7 @@ from mcp import ClientSession
 from mcp.types import CallToolResult, TextContent
 
 from agentic_evals.agents.trace_callback import TraceRecorder
+from agentic_evals.agents.weave_trace import weave_recorder
 from agentic_evals.tooling import mcp_servers
 
 TERMINATION_KEY = "agentic_evals:termination"
@@ -412,7 +413,8 @@ def langgraph_react(
                     middleware=default_middleware(max_model_calls),
                     name=name,
                 )
-                termination = await run_graph(graph, bridge, state, recorder, recursion_limit)
+                weave = [r for r in (weave_recorder(),) if r is not None]
+                termination = await run_graph(graph, bridge, state, recorder, recursion_limit, callbacks=[recorder, *weave])
             recorder.save()
             store().set(TERMINATION_KEY, termination)
             return bridge.state

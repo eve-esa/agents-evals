@@ -26,6 +26,9 @@ Three traces are stored per sample:
 - ``SUBAGENT_TRACES_KEY``: per specialist, its conversation (from its
   checkpointer) and its MCP calls.
 
+With Weave on, one ``WeaveRecorder`` serves every agent, so a specialist's run
+nests under the ``ask_*`` call that reached it (``agents.weave_trace``).
+
 The split used is stored under ``SPECIALISTS_KEY``.
 """
 
@@ -63,6 +66,7 @@ from agentic_evals.agents.specialists.a2a import (
 )
 from agentic_evals.agents.specialists.clustering import Specialist, plan_specialists
 from agentic_evals.agents.trace_callback import RAW_TRACE_KEY, SUBAGENT_TRACES_KEY, TraceRecorder
+from agentic_evals.agents.weave_trace import weave_recorder
 
 SPECIALISTS_KEY = "agentic_evals:specialists"
 
@@ -81,8 +85,12 @@ the step needs: the file paths, values and earlier results it should use, and \
 what it should return.
 - A specialist keeps its own history, so a follow-up to the same one can refer \
 to its earlier answer.
-- A reply that starts with [input-required] is a question about your request. \
-Send the missing details to the same specialist; it continues the same task.
+- A reply that starts with [input-required] is a question about your request: the \
+specialist cannot go on without what it names. Answer it with that information, taken \
+from the task or from earlier results (or get it with one of your own tools), and send \
+it to the same specialist; it continues the same task. Repeating a request that was \
+already answered with [input-required] gets the same reply, so each new request must \
+add what was asked for.
 - Check each answer before the next step. If a step failed, say what went wrong \
 when you ask again, or try another specialist.
 - When every step is done, give the final answer yourself, in the format the \
@@ -137,9 +145,9 @@ def own_bridge(run: RunSubAgent) -> RunSubAgent:
     seen only by that request's model calls.
     """
 
-    async def bridged(text: str, context_id: str, task_id: str) -> str:
+    async def bridged(text: str, context_id: str, metadata: dict[str, Any]) -> str:
         async with agent_bridge():
-            return await run(text, context_id, task_id)
+            return await run(text, context_id, metadata)
 
     return bridged
 
@@ -227,6 +235,7 @@ def langgraph_specialists(
         entries: list[dict[str, Any]] = []
         recorder = TraceRecorder(agent_name=name, entries=entries)
         raw = TraceRecorder(agent_name=name, roles=None)
+        weave = [r for r in (weave_recorder(),) if r is not None]
         async with agent_bridge(state) as bridge:
             async with AsyncExitStack() as stack:
                 tools = await load_task_mcp_tools(stack)
@@ -254,7 +263,7 @@ def langgraph_specialists(
                     )
                     run = own_bridge(
                         langgraph_runner(
-                            graph, [TraceRecorder(agent_name=spec.slug, entries=entries)], sub_recursion_limit
+                            graph, [TraceRecorder(agent_name=spec.slug, entries=entries), *weave], sub_recursion_limit
                         )
                     )
                     agents[spec.slug] = (
@@ -276,7 +285,7 @@ def langgraph_specialists(
                     recorder,
                     recursion_limit,
                     system_text=orchestrator_prompt(orchestrator_tools),
-                    callbacks=[recorder, raw],
+                    callbacks=[recorder, raw, *weave],
                 )
                 subagents = await subagent_traces(specialists, graphs, prompts, raw.entries, entries)
             recorder.save()

@@ -460,7 +460,7 @@ class RecordingExecutor(SubAgentExecutor):
 def test_a2a_card_follows_the_spec_and_runs_in_the_sample_context():
     calls = []
 
-    async def run(text: str, context_id: str, task_id: str) -> str:
+    async def run(text: str, context_id: str, metadata: dict) -> str:
         calls.append((text, context_id, SAMPLE.get()))
         return f"done: {text}"
 
@@ -502,7 +502,7 @@ def test_a2a_card_follows_the_spec_and_runs_in_the_sample_context():
 def test_input_required_continues_the_same_task():
     replies = iter(["NEEDS_INPUT: the path of the NIR band", "NDVI = 0.42", "EVI = 0.3"])
 
-    async def run(text: str, context_id: str, task_id: str) -> str:
+    async def run(text: str, context_id: str, metadata: dict) -> str:
         return next(replies)
 
     executor = RecordingExecutor(run)
@@ -525,7 +525,7 @@ def test_input_required_continues_the_same_task():
 
 
 def test_a2a_failure_is_returned_as_text():
-    async def run(text: str, context_id: str, task_id: str) -> str:
+    async def run(text: str, context_id: str, metadata: dict) -> str:
         raise RuntimeError("tool crashed")
 
     async def main():
@@ -609,10 +609,10 @@ def test_ask_artifact_names_the_task_the_specialist_calls_belong_to():
     entries: list = []
     recorder = TraceRecorder("veg", entries=entries)
 
-    async def run(text: str, context_id: str, task_id: str) -> str:
+    async def run(text: str, context_id: str, metadata: dict) -> str:
         # What langgraph_runner's config metadata does for every tool call of the sub-agent.
         run_id = uuid4()
-        await recorder.on_tool_start({"name": "calc_ndvi"}, "{}", run_id=run_id, metadata={"a2a_task_id": task_id})
+        await recorder.on_tool_start({"name": "calc_ndvi"}, "{}", run_id=run_id, metadata=metadata)
         await recorder.on_tool_end("0.42", run_id=run_id)
         return "NDVI = 0.42"
 
@@ -700,7 +700,7 @@ def test_each_specialist_request_has_its_own_bridge():
 
     seen = []
 
-    async def run(text: str, context_id: str, task_id: str) -> str:
+    async def run(text: str, context_id: str, metadata: dict) -> str:
         bridge = _patch_config.get().bridge
         await asyncio.sleep(0.05)  # overlap the two requests
         seen.append((text, bridge, _patch_config.get().bridge is bridge))
@@ -724,3 +724,95 @@ def test_each_specialist_request_has_its_own_bridge():
     assert bridges[0] is not bridges[1]
     assert all(bridge is not orchestrator for bridge in bridges)
     assert after is orchestrator and orchestrator.state.messages == []
+
+
+def test_serve_leaves_no_sdk_task_pending():
+    # Left pending, these tasks are destroyed when the sample ends and the SDK's
+    # OpenTelemetry spans fail to detach ("created in a different Context").
+    async def run(text: str, context_id: str, metadata: dict) -> str:
+        return "NEEDS_INPUT: the path"  # an input-required task stays open
+
+    async def main():
+        agents = {"veg": (SubAgentExecutor(run), lambda url: agent_card("Veg Agent", "Veg.", SKILLS, url))}
+        async with serve(agents) as urls, httpx.AsyncClient(timeout=30) as http:
+            (tool,) = await ask_tools(urls, http)
+            await tool.ainvoke({"request": "NDVI"})
+        await asyncio.sleep(0.1)
+        me = asyncio.current_task()
+        return [t.get_coro().__qualname__ for t in asyncio.all_tasks() if t is not me and not t.done()]
+
+    assert asyncio.run(main()) == []
+
+
+def test_a_request_names_the_tool_run_that_sent_it():
+    seen = {}
+    raw = TraceRecorder("orchestrator", roles=None)
+
+    async def run(text: str, context_id: str, metadata: dict) -> str:
+        seen.update(metadata)
+        return "ok"
+
+    async def main():
+        agents = {"veg": (SubAgentExecutor(run), lambda url: agent_card("Veg Agent", "Veg.", SKILLS, url))}
+        async with serve(agents) as urls, httpx.AsyncClient(timeout=30) as http:
+            (tool,) = await ask_tools(urls, http)
+            call = {"type": "tool_call", "name": tool.name, "args": {"request": "NDVI"}, "id": "c1"}
+            await tool.ainvoke(call, config={"callbacks": [raw]})
+
+    asyncio.run(main())
+    assert seen["caller_run_id"] == raw.entries[0]["run_id"]
+    assert seen["a2a_task_id"]
+
+
+def test_weave_recorder_nests_a_specialist_under_the_ask_call():
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langchain_core.outputs import ChatGeneration, LLMResult
+
+    from agentic_evals.agents.trace_callback import ROLE_METADATA_KEY
+    from agentic_evals.agents.weave_trace import WeaveRecorder
+
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def create_call(self, op, inputs, parent=None, attributes=None, display_name=None, use_stack=True):
+            call = SimpleNamespace(id=str(uuid4()), op=op, name=display_name, parent=parent, attributes=attributes or {}, output=None)
+            self.calls.append(call)
+            return call
+
+        def finish_call(self, call, output=None, exception=None):
+            call.output = output if exception is None else repr(exception)
+
+    client, solver = Client(), SimpleNamespace(id="solver")
+    weave = WeaveRecorder(client, solver)
+    orch, ask, spec, model, tool = (uuid4() for _ in range(5))
+
+    def reply(text):
+        return LLMResult(generations=[[ChatGeneration(message=AIMessage(content=text))]])
+
+    async def main():
+        await weave.on_chain_start({}, {"messages": [HumanMessage("Q?")]}, run_id=orch, name="orchestrator")
+        await weave.on_tool_start({"name": "ask_veg"}, "", run_id=ask, parent_run_id=orch, metadata={ROLE_METADATA_KEY: "peer"})
+        # The specialist's own graph run, started over A2A while ask_veg is open.
+        await weave.on_chain_start({}, {"messages": [HumanMessage("NDVI")]}, run_id=spec, name="veg", metadata={"caller_run_id": str(ask)})
+        await weave.on_chat_model_start({}, [[HumanMessage("NDVI")]], run_id=model, parent_run_id=spec)
+        await weave.on_llm_end(reply("calling"), run_id=model)
+        await weave.on_tool_start({"name": "calc_ndvi"}, "", run_id=tool, parent_run_id=spec, inputs={"path": "a.tif"})
+        await weave.on_tool_end("0.42", run_id=tool)
+        await weave.on_chain_end({"messages": [AIMessage("NDVI = 0.42")]}, run_id=spec)
+        await weave.on_tool_end(_peer_message("NDVI = 0.42", {"task_id": "t1"}), run_id=ask)
+        await weave.on_chain_end({"messages": [AIMessage("done")]}, run_id=orch)
+
+    asyncio.run(main())
+    by_name = {c.name: c for c in client.calls}
+    assert by_name["orchestrator"].parent is solver
+    assert by_name["ask_veg"].parent is by_name["orchestrator"]
+    assert by_name["veg"].parent is by_name["ask_veg"]
+    assert by_name["veg · model"].parent is by_name["veg"] and by_name["calc_ndvi"].parent is by_name["veg"]
+    assert by_name["ask_veg"].output["a2a"] == {"task_id": "t1"} and by_name["ask_veg"].attributes["role"] == "peer"
+    assert by_name["calc_ndvi"].output == {"output": "0.42", "error": False}
+    assert by_name["veg"].output == {"answer": "NDVI = 0.42"}
+    assert all(c.output is not None for c in client.calls)
