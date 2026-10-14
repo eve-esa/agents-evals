@@ -1,4 +1,4 @@
-# OpenEarthAgent step (teacher-forced): Mistral Large 4 on Mistral's API.
+# OpenEarthAgent step (teacher-forced): Mistral Large 4 on OpenRouter.
 #
 # Shabbir et al., arXiv:2602.17665, Table 3. Each gold turn is one sample.
 # No tools run. max_iterations is recorded; the solver is still one
@@ -6,8 +6,9 @@
 # configs/openearthagent/mistral_large_4.yaml.
 #
 # Solver: https://docs.mistral.ai/models/mistral-large-4-0 (6 Oct 2026,
-# multimodal, function calling). The live /v1/models listing reports
-# mistral-large-4-0 with context 524288. Vision is off for now: the 533
+# multimodal, function calling). OpenRouter's live /api/v1/models listing
+# (14 Oct 2026) reports mistralai/mistral-large-4-0 with context 1048576,
+# text and image input, and reasoning_effort. Vision is off for now: the 533
 # image tasks are not applicable and are not scored, so this run covers
 # the text tasks only and is not Table 3's full task set. Temperature 0.4
 # and max_tokens 256 are the upstream OpenAI driver's settings (task.py).
@@ -27,8 +28,8 @@ task:
     judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
 
 model:
-  model: openai-api/mistral/mistral-large-4-0
-  base_url: https://api.mistral.ai/v1
+  model: openai-api/openrouter/mistralai/mistral-large-4-0
+  base_url: https://openrouter.ai/api/v1
 
 model_roles:
   grader:
