@@ -1,7 +1,6 @@
 """Regenerate the figures the workshop notebook embeds: ``python figures/make_figures.py`` from this folder.
 
-Pass@k curves use 1 - (1 - p)^k, the Pass@k of an agent that succeeds with
-probability p on every independent attempt (Chen et al., 2021, with n -> infinity).
+The Pass@k tree uses illustrative edge probabilities; Pass@k = 1 - (1 - p)^k.
 The run anatomy is the real trace of Earth-Bench question 11 from an EVE run.
 """
 
@@ -25,30 +24,11 @@ def box(ax, x, y, w, h, text, face, edge, size=9.5, color=INK, weight="normal"):
     ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=size, color=color, fontweight=weight)
 
 
-def pass_at_k():
-    fig, ax = plt.subplots(figsize=(7.2, 3.8))
-    ks = list(range(1, 9))
-    for p, colour in ((0.3, RED), (0.5, AMBER), (0.7, GREEN)):
-        ax.plot(ks, [1 - (1 - p) ** k for k in ks], marker="o", ms=4.5, lw=2, color=colour,
-                label=f"succeeds {int(p * 100)}% of the time per attempt")
-    ax.text(1.15, 0.06, "k = 1 is Pass@1: how reliable one try is", fontsize=8.6, color=MUTED)
-    ax.set_title("Pass@k grows with k, and the gap shows inconsistency", loc="left", fontsize=11, fontweight="bold")
-    ax.set_xlabel("k, attempts allowed")
-    ax.set_ylabel("Pass@k")
-    ax.set_ylim(0, 1.04)
-    ax.set_xticks(ks)
-    ax.grid(axis="y", color=GRID, lw=0.8)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, fontsize=8.6, loc="lower right")
-    fig.savefig(OUT / "pass_at_k.png", dpi=170, bbox_inches="tight")
-    plt.close(fig)
-
-
 def pass_at_k_tree():
     """Tree of possible traces for one task. Edge probabilities are illustrative; the three drawn attempts are one sample."""
     fig, ax = plt.subplots(figsize=(11.5, 5.6))
     ax.set_xlim(-0.3, 12.6)
-    ax.set_ylim(-1.5, 5.9)
+    ax.set_ylim(-2.1, 5.9)
     ax.axis("off")
     ax.set_title("One task, many possible traces: Pass@k asks whether k sampled traces include a correct one",
                  loc="left", fontsize=11, fontweight="bold")
@@ -119,11 +99,13 @@ def pass_at_k_tree():
                 size=8.4, weight="bold" if name == "root" else "normal")
     p_ok = sum(prob[n] for n in correct)
     ps = [1 - (1 - p_ok) ** k for k in (1, 2, 3)]
-    ax.text(0.0, -0.55, f"Chance that one attempt ends correct: {p_ok:.2f}  (sum over the green leaves; edge numbers are illustrative).",
-            fontsize=9.5, color=INK)
-    ax.text(0.0, -1.0, f"Expected Pass@1 = {ps[0]:.2f}     Pass@2 = {ps[1]:.2f}     Pass@3 = {ps[2]:.2f}",
+    ax.text(0.0, -0.55, "Numbers on the edges: chance the agent takes that branch from the node on its left (illustrative; the edges leaving a node add up to 1).",
+            fontsize=9.2, color=INK)
+    ax.text(0.0, -0.95, f"Multiply along a path for the chance of that trace; add the green leaves for the chance p that one attempt is correct: p = {p_ok:.2f}.",
+            fontsize=9.2, color=INK)
+    ax.text(0.0, -1.45, f"Expected Pass@1 = {ps[0]:.2f}     Pass@2 = {ps[1]:.2f}     Pass@3 = {ps[2]:.2f}",
             fontsize=10.5, fontweight="bold", color=GREEN)
-    ax.text(0.0, -1.4, "This draw: attempt 1 gives up (wrong), attempts 2 and 3 are correct, so this task scores Pass@1 = 0, Pass@2 = 1, Pass@3 = 1.",
+    ax.text(0.0, -1.85, "This draw: attempt 1 gives up (wrong), attempts 2 and 3 are correct, so this task scores Pass@1 = 0, Pass@2 = 1, Pass@3 = 1.",
             fontsize=9.2, color=MUTED)
     fig.savefig(OUT / "pass_at_k_tree.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
@@ -166,7 +148,6 @@ def run_anatomy():
 
 
 if __name__ == "__main__":
-    pass_at_k()
     pass_at_k_tree()
     run_anatomy()
-    print("wrote", OUT / "pass_at_k.png", OUT / "run_anatomy.png")
+    print("wrote", OUT / "pass_at_k_tree.png", OUT / "run_anatomy.png")
