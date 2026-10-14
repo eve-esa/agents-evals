@@ -409,21 +409,17 @@ def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: 
 
 
 def compare_widget(runs: dict[str, list[dict[str, Any]]], gold: list[dict[str, Any]]) -> Any:
-    """A dropdown of runs; picking one shows its trace next to the expert's (``compare_html``)."""
+    """A dropdown of runs; picking one shows its trace next to the expert's (``compare_html``).
+
+    The view is one ``HTML`` widget whose value is replaced on each pick, so it
+    is drawn once, wherever the front end renders widgets.
+    """
     import ipywidgets as widgets
-    from IPython.display import HTML, display
 
     picker = widgets.Dropdown(options=list(runs), description="Run:", layout=widgets.Layout(width="460px"))
-    out = widgets.Output()
-
-    def show(name: str) -> None:
-        with out:
-            out.clear_output(wait=True)
-            display(HTML(compare_html(runs[name], gold, name)))
-
-    picker.observe(lambda change: show(change["new"]), names="value")
-    show(picker.value)
-    return widgets.VBox([picker, out])
+    view = widgets.HTML(value=compare_html(runs[picker.value], gold, picker.value))
+    picker.observe(lambda change: setattr(view, "value", compare_html(runs[change["new"]], gold, change["new"])), names="value")
+    return widgets.VBox([picker, view])
 
 
 def sample_calls(sample: Any) -> list[dict[str, Any]]:
