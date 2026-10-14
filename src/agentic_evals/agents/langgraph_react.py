@@ -49,6 +49,7 @@ from langgraph.types import Command
 from mcp import ClientSession
 from mcp.types import CallToolResult, TextContent
 
+from agentic_evals.agents.langfuse_trace import flush_langfuse, langfuse_handler
 from agentic_evals.agents.trace_callback import TraceRecorder
 from agentic_evals.agents.weave_trace import weave_recorder
 from agentic_evals.tooling import mcp_servers
@@ -407,10 +408,11 @@ async def _execute(state: AgentState, graph: GraphFactory, *, recursion_limit: i
             tools = await load_task_mcp_tools(stack)
             # ChatOpenAI(model="inspect") is routed by agent_bridge to the eval's --model.
             compiled = graph(ChatOpenAI(model="inspect", api_key="inspect"), tools)
-            weave = [r for r in (weave_recorder(),) if r is not None]
+            weave = [r for r in (weave_recorder(), langfuse_handler()) if r is not None]
             termination = await run_graph(compiled, bridge, state, recorder, recursion_limit, callbacks=[recorder, *weave])
         recorder.save()
         store().set(TERMINATION_KEY, termination)
+        flush_langfuse()
         return bridge.state
 
 
