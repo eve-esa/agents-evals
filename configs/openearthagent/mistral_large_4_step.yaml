@@ -7,9 +7,10 @@
 #
 # Solver: https://docs.mistral.ai/models/mistral-large-4-0 (6 Oct 2026,
 # multimodal, function calling). The live /v1/models listing reports
-# mistral-large-4-0 with context 524288, so vision stays on and image
-# turns are scored. Temperature 0.4 and max_tokens 256 are the upstream
-# OpenAI driver's settings (task.py).
+# mistral-large-4-0 with context 524288. Vision is off for now: the 533
+# image tasks are not applicable and are not scored, so this run covers
+# the text tasks only and is not Table 3's full task set. Temperature 0.4
+# and max_tokens 256 are the upstream OpenAI driver's settings (task.py).
 #
 # https://docs.mistral.ai/capabilities/reasoning — "none" keeps content a
 # string. The official answer judge stays gpt-4o-mini. The October panel
@@ -20,9 +21,9 @@
 task:
   task: agentic_evals/openearthagent
   args:
-    max_iterations: 15
+    max_iterations: 5
     regime: step
-    vision: true
+    vision: false
     judges: openai-api/openrouter/deepseek/deepseek-v3.2,openai-api/openrouter/openai/gpt-6-luna,openai-api/openrouter/qwen/qwen3.8-flash,openai-api/mistral/mistral-large-2512
 
 model:
