@@ -169,11 +169,9 @@ def test_compare_html_marks_each_step_and_reports_the_scores():
     gold = [call("get_filelist", dir_path="d"), call("lst", out="a.tif"), call("ratio", threshold=310.0)]
     pred = [call("get_filelist", dir_path="d"), call("band_ratio", x=1), call("ratio", threshold=300.0), call("extra")]
     page = compare_html(pred, gold, "run e")
-    assert page.count("same tool, same arguments") == 1
-    assert page.count("different tool") == 1
-    assert page.count("same tool, different arguments") == 1   # step 3: ratio with threshold 300, not 310
-    assert page.count("extra call") == 1
-    assert "TEM <b>0.33</b>" in page and "4 vs 3" in page
-
-    same_tool = compare_html([call("ratio", threshold=300.0)], [call("ratio", threshold=310.0)])
-    assert "same tool, different arguments" in same_tool and "text-decoration:underline wavy" in same_tool
+    # one status icon per row: match, different tool, different arguments (threshold 300, not 310), extra call
+    for icon in ("\u2713", "\u2717", "\u2260", "+"):
+        assert f"justify-content:center'>{icon}</div>" in page
+    assert page.count("justify-content:center'>") == 4
+    assert "0.33" in page and "agent vs 3 expert" in page
+    assert "(expert: 310.0)" in page

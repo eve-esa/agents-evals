@@ -282,32 +282,73 @@ def leaderboard(log_dir: str = "logs", questions: tuple[int, ...] | list[int] = 
 
 
 _STATUS = {
-    "match": ("rgba(46,160,67,.22)", "same tool, same arguments"),
-    "args": ("rgba(210,153,34,.28)", "same tool, different arguments"),
-    "tool": ("rgba(248,81,73,.25)", "different tool"),
-    "missing": ("rgba(248,81,73,.25)", "expert step the agent never made"),
-    "extra": ("rgba(139,148,158,.28)", "extra call"),
+    "match": ("#2ea043", "\u2713", "Same tool, same arguments"),
+    "args": ("#d29922", "\u2260", "Same tool, different arguments"),
+    "tool": ("#f85149", "\u2717", "Different tool"),
+    "missing": ("#f85149", "\u2212", "Expert step never made"),
+    "extra": ("#8b949e", "+", "Extra call"),
 }
+_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+_TILES = (
+    ("TAO", "Tool-Any-Order"),
+    ("TIO", "Tool-In-Order"),
+    ("TEM", "Tool-Exact-Match"),
+    ("ParamAcc", "Parameter accuracy"),
+)
 
 
-def _call_html(call: dict[str, Any] | None, differing: set[str] = frozenset()) -> str:
-    import html
+def _value_text(value: Any) -> str:
     import json
 
+    text = json.dumps(value, ensure_ascii=False, default=str)
+    return text if len(text) <= 64 else text[:61] + "..."
+
+
+def _card_html(call: dict[str, Any] | None, other: dict[str, Any] | None, side: str, status: str) -> str:
+    """One tool call as a card. On the agent side, arguments that differ show the expert's value."""
+    import html
+
     if call is None:
-        return "<i>none</i>"
+        note = "no call" if side == "agent" else "no expert step"
+        return (
+            "<div style='border:1px dashed rgba(128,128,128,.55);border-radius:8px;padding:8px 10px;"
+            f"opacity:.6;font-style:italic'>{note}</div>"
+        )
+    colour = _STATUS[status][0] if side == "agent" else "#8b949e"
     arguments = call.get("input") or {}
-    parts = []
+    other_arguments = (other or {}).get("input") or {}
+    lines = []
     for key, value in (arguments.items() if isinstance(arguments, dict) else [("", arguments)]):
-        text = json.dumps(value, ensure_ascii=False, default=str)
-        text = text if len(text) <= 70 else text[:67] + "..."
-        mark = " style='text-decoration:underline wavy'" if key in differing else ""
-        parts.append(f"<span{mark}>{html.escape(str(key))}={html.escape(text)}</span>" if key else html.escape(text))
-    return f"<b>{html.escape(str(call.get('name', '')))}</b>(<span style='opacity:.85'>{', '.join(parts)}</span>)"
+        differs = side == "agent" and status == "args" and isinstance(other_arguments, dict) and other_arguments.get(key) != value
+        shown = html.escape(_value_text(value))
+        label = f"<span style='opacity:.65'>{html.escape(str(key))}:</span> " if key else ""
+        extra = ""
+        if differs:
+            extra = f" <span style='opacity:.75'>(expert: {html.escape(_value_text(other_arguments.get(key)))})</span>"
+        mark = "background:rgba(210,153,34,.30);border-radius:3px;padding:0 3px;" if differs else ""
+        lines.append(f"<div style='{mark}overflow-wrap:anywhere'>{label}{shown}{extra}</div>")
+    body = "".join(lines) or "<div style='opacity:.55'>no arguments</div>"
+    return (
+        f"<div style='border-left:4px solid {colour};background:rgba(128,128,128,.10);border-radius:8px;"
+        "padding:7px 10px;min-width:0'>"
+        f"<div style='font-weight:600;font-family:{_MONO}'>{html.escape(str(call.get('name', '')))}</div>"
+        f"<div style='font-family:{_MONO};font-size:11.5px;margin-top:3px'>{body}</div></div>"
+    )
+
+
+def _tile_html(code: str, label: str, value: float) -> str:
+    return (
+        "<div style='flex:1 1 120px;border:1px solid rgba(128,128,128,.35);border-radius:8px;padding:6px 10px'>"
+        f"<div style='font-size:11px;opacity:.7'>{label}</div>"
+        f"<div style='font-size:20px;font-weight:700;line-height:1.2'>{value:.2f}"
+        f"<span style='font-size:11px;font-weight:400;opacity:.6'> {code}</span></div>"
+        "<div style='height:5px;border-radius:3px;background:rgba(128,128,128,.25);margin-top:4px'>"
+        f"<div style='height:5px;border-radius:3px;width:{max(0.0, min(1.0, value)) * 100:.0f}%;background:#2ea043'></div></div></div>"
+    )
 
 
 def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: str = "") -> str:
-    """Expert and agent tool calls side by side, one row per position, with the Earth-Bench metrics.
+    """Expert and agent tool calls side by side, one row per position, with the Earth-Bench scores.
 
     Rows are aligned by position, the way Earth-Bench's TEM and ParamAcc line
     steps up. A call is ``{"name": ..., "input": {...}}``. The scores come from
@@ -321,7 +362,6 @@ def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: 
     for i in range(max(len(pred), len(gold))):
         g = gold[i] if i < len(gold) else None
         p = pred[i] if i < len(pred) else None
-        differing: set[str] = set()
         if g is None:
             status = "extra"
         elif p is None:
@@ -332,36 +372,39 @@ def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: 
             status = "match"
         else:
             status = "args"
-            a, b = p.get("input") or {}, g.get("input") or {}
-            if isinstance(a, dict) and isinstance(b, dict):
-                differing = {k for k in set(a) | set(b) if a.get(k) != b.get(k)}
-        colour, label = _STATUS[status]
+        colour, icon, label = _STATUS[status]
         rows.append(
-            f"<tr style='background:{colour}'><td style='padding:4px 8px'>{i + 1}</td>"
-            f"<td style='padding:4px 8px'>{_call_html(g)}</td>"
-            f"<td style='padding:4px 8px'>{_call_html(p, differing)}</td>"
-            f"<td style='padding:4px 8px;white-space:nowrap'>{label}</td></tr>"
+            "<div style='display:grid;grid-template-columns:28px minmax(0,1fr) 34px minmax(0,1fr);gap:8px;align-items:center'>"
+            f"<div style='text-align:center;opacity:.6;font-size:12px'>{i + 1}</div>"
+            f"{_card_html(g, p, 'expert', status)}"
+            f"<div title='{label}' style='width:26px;height:26px;border-radius:13px;background:{colour};color:#fff;"
+            f"font-weight:700;display:flex;align-items:center;justify-content:center'>{icon}</div>"
+            f"{_card_html(p, g, 'agent', status)}</div>"
         )
-    scores = {
-        "TAO": metrics.tool_any_order(pred, gold),
-        "TIO": metrics.tool_in_order(pred, gold),
-        "TEM": metrics.tool_exact_match(pred, gold),
-        "ParamAcc": metrics.parameter_accuracy(pred, gold),
-        "calls": f"{len(pred)} vs {len(gold)}",
-    }
-    chips = " ".join(
-        f"<span style='border:1px solid currentColor;border-radius:10px;padding:1px 8px;margin-right:4px'>"
-        f"{name} <b>{value if isinstance(value, str) else f'{value:.2f}'}</b></span>"
-        for name, value in scores.items()
+    values = (
+        metrics.tool_any_order(pred, gold),
+        metrics.tool_in_order(pred, gold),
+        metrics.tool_exact_match(pred, gold),
+        metrics.parameter_accuracy(pred, gold),
     )
-    heading = f"<div style='font-weight:600;margin-bottom:4px'>{html.escape(title)}</div>" if title else ""
+    tiles = "".join(_tile_html(code, label, value) for (code, label), value in zip(_TILES, values))
+    legend = " ".join(
+        f"<span style='margin-right:10px;white-space:nowrap'><span style='display:inline-block;width:10px;height:10px;"
+        f"border-radius:5px;background:{colour};margin-right:4px'></span>{label}</span>"
+        for colour, _icon, label in _STATUS.values()
+    )
+    heading = f"<div style='font-size:15px;font-weight:700;margin-bottom:8px'>{html.escape(title)}</div>" if title else ""
     return (
-        f"<div style='font-size:13px;line-height:1.5'>{heading}<div style='margin:4px 0 8px'>{chips}</div>"
-        "<table style='border-collapse:collapse;width:100%'>"
-        "<thead><tr style='text-align:left;border-bottom:1px solid currentColor'>"
-        "<th style='padding:4px 8px'>#</th><th style='padding:4px 8px'>Expert</th>"
-        "<th style='padding:4px 8px'>Agent</th><th style='padding:4px 8px'>Step</th></tr></thead>"
-        f"<tbody>{''.join(rows)}</tbody></table></div>"
+        "<div style='font-size:13px;line-height:1.45;max-width:980px'>"
+        f"{heading}<div style='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px'>{tiles}"
+        f"<div style='flex:1 1 120px;border:1px solid rgba(128,128,128,.35);border-radius:8px;padding:6px 10px'>"
+        f"<div style='font-size:11px;opacity:.7'>Calls</div><div style='font-size:20px;font-weight:700;line-height:1.2'>"
+        f"{len(pred)}<span style='font-size:11px;font-weight:400;opacity:.6'> agent vs {len(gold)} expert</span></div></div></div>"
+        "<div style='display:grid;grid-template-columns:28px minmax(0,1fr) 34px minmax(0,1fr);gap:8px;"
+        "font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.65;margin-bottom:4px'>"
+        "<div></div><div>Expert</div><div></div><div>Agent</div></div>"
+        f"<div style='display:flex;flex-direction:column;gap:6px'>{''.join(rows)}</div>"
+        f"<div style='font-size:11.5px;opacity:.85;margin-top:10px'>{legend}</div></div>"
     )
 
 
@@ -370,7 +413,7 @@ def compare_widget(runs: dict[str, list[dict[str, Any]]], gold: list[dict[str, A
     import ipywidgets as widgets
     from IPython.display import HTML, display
 
-    picker = widgets.Dropdown(options=list(runs), description="Run:", layout=widgets.Layout(width="420px"))
+    picker = widgets.Dropdown(options=list(runs), description="Run:", layout=widgets.Layout(width="460px"))
     out = widgets.Output()
 
     def show(name: str) -> None:
