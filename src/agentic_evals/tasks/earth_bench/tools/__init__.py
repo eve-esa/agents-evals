@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import os
 import sys
 from datetime import timedelta
 from functools import cache
@@ -30,6 +31,7 @@ PERCEPTION_FAILURE = "Failed to call model"
 PERCEPTION_LOOKUP = Path(__file__).resolve().parent / "model_results.csv"
 _TOOLS_DIR = Path(__file__).resolve().parent
 _STDIO_GUARD = _TOOLS_DIR / "stdio_guard.py"
+KIT_STDERR_ENV = "AGENTIC_EVALS_KIT_STDERR"
 
 # mcp ClientSession read_timeout_seconds defaults to None, and send_request
 # then calls anyio.fail_after(None), which does not expire
@@ -58,12 +60,19 @@ def kit_servers(
         raise FileNotFoundError(
             f"Earth-Bench kits missing from {_TOOLS_DIR}: {', '.join(missing)}"
         )
+    # AGENTIC_EVALS_KIT_STDERR=file keeps kit diagnostics in output_dir/kit_stderr.log
+    # instead of the caller's stderr (the workshop notebook sets it).
+    stderr_args: list[str] = []
+    if os.environ.get(KIT_STDERR_ENV, "").strip().lower() == "file":
+        output_dir.mkdir(parents=True, exist_ok=True)
+        stderr_args = ["--stderr", str(output_dir / "kit_stderr.log")]
     return {
         kit: {
             "transport": "stdio",
             "command": sys.executable,
             "args": [
                 str(_STDIO_GUARD),
+                *stderr_args,
                 str(_TOOLS_DIR / f"{kit}.py"),
                 "--temp_dir",
                 str(output_dir),

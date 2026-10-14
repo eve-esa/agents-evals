@@ -132,10 +132,15 @@ def run(
         # A silent response otherwise sits until the OpenAI client's
         # 10 minute timeout. attempt_timeout covers a non-streaming call;
         # stream_idle_timeout covers a stream that stops delivering chunks.
-        # max_retries is extra attempts after the first (Inspect).
         attempt_timeout=180,
         stream_idle_timeout=60,
-        max_retries=2,
+        # A room shares one endpoint and gets HTTP 429. max_retries is extra
+        # attempts after the first, with Inspect's exponential backoff;
+        # max_connections caps this notebook's concurrent model calls.
+        max_retries=6,
+        max_connections=2,
+        # A sample that still fails is run again instead of ending the eval.
+        retry_on_error=2,
     )
     if not logs:
         raise RuntimeError("inspect eval returned no log")
@@ -199,7 +204,7 @@ LEADERBOARD_METRICS: tuple[str, ...] = ("accuracy", "tao", "tio", "tem", "param_
 
 
 def leaderboard(log_dir: str = "logs", questions: tuple[int, ...] | list[int] = WORKSHOP_QUESTIONS) -> Any:
-    """One row per finished Earth-Bench run in ``log_dir`` that covered exactly ``questions``.
+    """One row per finished Earth-Bench run in ``log_dir`` that scored exactly ``questions``.
 
     The agent column is the ``name`` given to ``langgraph_agent``. Runs on other
     question sets are left out so every row is a mean over the same tasks.
@@ -216,7 +221,7 @@ def leaderboard(log_dir: str = "logs", questions: tuple[int, ...] | list[int] = 
         if log.status != "success" or log.eval.task_registry_name != "agentic_evals/earth_bench":
             continue
         frame = results_df(log)
-        if frame.empty or sorted(frame.index) != wanted:
+        if frame.empty or sorted(frame.index) != wanted or "accuracy" not in frame or frame["accuracy"].isna().any():
             continue
         step = log.plan.steps[-1] if log.plan and log.plan.steps else None
         row: dict[str, Any] = {

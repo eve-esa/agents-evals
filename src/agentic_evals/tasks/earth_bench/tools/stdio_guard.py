@@ -13,6 +13,10 @@ https://docs.python.org/3/library/io.html#io.TextIOWrapper
 This process is the kit's entry point. It points fd 1 at stderr (so ``print``
 and C libraries such as GDAL leave the protocol pipe) and passes the original
 stdout into ``stdio_server``.
+
+``--stderr FILE`` before the kit path appends the kit's stderr (FastMCP's
+banner, warnings, and tool tracebacks) to ``FILE`` instead of the client's
+stderr, where a notebook shows each one as a red error.
 """
 
 from __future__ import annotations
@@ -54,11 +58,22 @@ def patch_stdio_server(protocol: BinaryIO) -> None:
     mcp_stdio.stdio_server = stdio_server
 
 
+def redirect_stderr(path: str) -> None:
+    """Append fd 2 to ``path``. Runs before fd 1 is pointed at stderr, so both land there."""
+    sys.stderr.flush()
+    log_fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    os.dup2(log_fd, 2)
+    os.close(log_fd)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = list(sys.argv if argv is None else argv)
+    if len(args) >= 3 and args[1] == "--stderr":
+        redirect_stderr(args[2])
+        args = [args[0], *args[3:]]
     if len(args) < 2:
         raise SystemExit(
-            f"usage: {args[0] if args else 'stdio_guard.py'} KIT.py [args...]"
+            f"usage: {args[0] if args else 'stdio_guard.py'} [--stderr FILE] KIT.py [args...]"
         )
     protocol = redirect_protocol_stdout()
     patch_stdio_server(protocol)

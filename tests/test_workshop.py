@@ -75,7 +75,9 @@ def test_run_retries_a_silent_model_attempt(monkeypatch):
     assert captured["max_tokens"] == 4096
     assert captured["attempt_timeout"] == 180
     assert captured["stream_idle_timeout"] == 60
-    assert captured["max_retries"] == 2
+    assert captured["max_retries"] == 6
+    assert captured["max_connections"] == 2
+    assert captured["retry_on_error"] == 2
 
 
 def _log(name, regime, ids, accuracy, status="success"):
@@ -101,7 +103,9 @@ def test_leaderboard_keeps_finished_runs_on_the_workshop_questions(monkeypatch):
         "b.eval": _log("mine", "ap", WORKSHOP_QUESTIONS, 0.8),
         "c.eval": _log("partial", "ap", WORKSHOP_QUESTIONS[:3], 1.0),
         "d.eval": _log("crashed", "ap", WORKSHOP_QUESTIONS, 1.0, status="error"),
+        "e.eval": _log("unscored", "ap", WORKSHOP_QUESTIONS, 1.0),
     }
+    logs["e.eval"].samples[0].scores = {}
     monkeypatch.setattr("inspect_ai.log.list_eval_logs", lambda _dir: [SimpleNamespace(name=n) for n in logs])
     monkeypatch.setattr("inspect_ai.log.read_eval_log", lambda info: logs[info.name])
     board = leaderboard("logs")

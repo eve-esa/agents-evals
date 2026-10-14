@@ -108,6 +108,31 @@ def test_stdio_guard_keeps_prints_off_the_jsonrpc_line(tmp_path):
     assert "DIAGNOSTIC" in proc.stderr
 
 
+def test_kit_stderr_goes_to_a_file_when_asked(tmp_path, monkeypatch):
+    monkeypatch.delenv("AGENTIC_EVALS_KIT_STDERR", raising=False)
+    assert "--stderr" not in kit_servers(tmp_path, root=tmp_path)["Analysis"]["args"]
+    monkeypatch.setenv("AGENTIC_EVALS_KIT_STDERR", "file")
+    args = kit_servers(tmp_path / "out", root=tmp_path)["Analysis"]["args"]
+    assert args[1:3] == ["--stderr", str(tmp_path / "out" / "kit_stderr.log")]
+    assert args[3].endswith("Analysis.py")
+
+    kit = tmp_path / "kit.py"
+    kit.write_text("import sys\nprint('PRINTED')\nprint('WARNED', file=sys.stderr)\n", encoding="utf-8")
+    log = tmp_path / "kit_stderr.log"
+    guard = Path(earth_tools.__file__).resolve().parent / "stdio_guard.py"
+    proc = subprocess.run(
+        [sys.executable, str(guard), "--stderr", str(log), str(kit)],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert proc.stdout == "" and proc.stderr == ""
+    assert "PRINTED" in log.read_text() and "WARNED" in log.read_text()
+
+
 def test_is_tool_failure():
     assert is_tool_failure("Failed to call model")
     assert is_tool_failure({"text": "... Failed to call model ..."})

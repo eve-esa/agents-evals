@@ -30,9 +30,12 @@ generate_config:
   max_tokens: 4096
   attempt_timeout: 180
   stream_idle_timeout: 60
-  max_retries: 2
+  # A room shares one endpoint and gets HTTP 429: back off and cap concurrent calls.
+  max_retries: 6
+  max_connections: 2
 
 eval_config:
   sample_id: [11, 2, 7, 8, 19, 21, 26, 31, 36, 42]
   epochs: 1
   max_samples: 4
+  retry_on_error: 2
