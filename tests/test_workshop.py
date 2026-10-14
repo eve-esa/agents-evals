@@ -158,3 +158,22 @@ def test_check_budget_raises_on_a_spent_quota(monkeypatch):
         workshop.check_budget()
     monkeypatch.setattr("httpx.post", lambda *_a, **_k: SimpleNamespace(status_code=200, text="{}"))
     workshop.check_budget()
+
+
+def test_compare_html_marks_each_step_and_reports_the_scores():
+    from workshop import compare_html
+
+    def call(name, **kw):
+        return {"name": name, "input": kw}
+
+    gold = [call("get_filelist", dir_path="d"), call("lst", out="a.tif"), call("ratio", threshold=310.0)]
+    pred = [call("get_filelist", dir_path="d"), call("band_ratio", x=1), call("ratio", threshold=300.0), call("extra")]
+    page = compare_html(pred, gold, "run e")
+    assert page.count("same tool, same arguments") == 1
+    assert page.count("different tool") == 1
+    assert page.count("same tool, different arguments") == 1   # step 3: ratio with threshold 300, not 310
+    assert page.count("extra call") == 1
+    assert "TEM <b>0.33</b>" in page and "4 vs 3" in page
+
+    same_tool = compare_html([call("ratio", threshold=300.0)], [call("ratio", threshold=310.0)])
+    assert "same tool, different arguments" in same_tool and "text-decoration:underline wavy" in same_tool

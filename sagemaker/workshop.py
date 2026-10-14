@@ -281,6 +281,115 @@ def leaderboard(log_dir: str = "logs", questions: tuple[int, ...] | list[int] = 
     return board.sort_values(["regime", "accuracy", "tio"], ascending=[True, False, False]).reset_index(drop=True)
 
 
+_STATUS = {
+    "match": ("rgba(46,160,67,.22)", "same tool, same arguments"),
+    "args": ("rgba(210,153,34,.28)", "same tool, different arguments"),
+    "tool": ("rgba(248,81,73,.25)", "different tool"),
+    "missing": ("rgba(248,81,73,.25)", "expert step the agent never made"),
+    "extra": ("rgba(139,148,158,.28)", "extra call"),
+}
+
+
+def _call_html(call: dict[str, Any] | None, differing: set[str] = frozenset()) -> str:
+    import html
+    import json
+
+    if call is None:
+        return "<i>none</i>"
+    arguments = call.get("input") or {}
+    parts = []
+    for key, value in (arguments.items() if isinstance(arguments, dict) else [("", arguments)]):
+        text = json.dumps(value, ensure_ascii=False, default=str)
+        text = text if len(text) <= 70 else text[:67] + "..."
+        mark = " style='text-decoration:underline wavy'" if key in differing else ""
+        parts.append(f"<span{mark}>{html.escape(str(key))}={html.escape(text)}</span>" if key else html.escape(text))
+    return f"<b>{html.escape(str(call.get('name', '')))}</b>(<span style='opacity:.85'>{', '.join(parts)}</span>)"
+
+
+def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: str = "") -> str:
+    """Expert and agent tool calls side by side, one row per position, with the Earth-Bench metrics.
+
+    Rows are aligned by position, the way Earth-Bench's TEM and ParamAcc line
+    steps up. A call is ``{"name": ..., "input": {...}}``. The scores come from
+    ``agentic_evals.tasks.earth_bench.metrics``, the same functions the scorer uses.
+    """
+    import html
+
+    from agentic_evals.tasks.earth_bench import metrics
+
+    rows = []
+    for i in range(max(len(pred), len(gold))):
+        g = gold[i] if i < len(gold) else None
+        p = pred[i] if i < len(pred) else None
+        differing: set[str] = set()
+        if g is None:
+            status = "extra"
+        elif p is None:
+            status = "missing"
+        elif p.get("name") != g.get("name"):
+            status = "tool"
+        elif p.get("input") == g.get("input"):
+            status = "match"
+        else:
+            status = "args"
+            a, b = p.get("input") or {}, g.get("input") or {}
+            if isinstance(a, dict) and isinstance(b, dict):
+                differing = {k for k in set(a) | set(b) if a.get(k) != b.get(k)}
+        colour, label = _STATUS[status]
+        rows.append(
+            f"<tr style='background:{colour}'><td style='padding:4px 8px'>{i + 1}</td>"
+            f"<td style='padding:4px 8px'>{_call_html(g)}</td>"
+            f"<td style='padding:4px 8px'>{_call_html(p, differing)}</td>"
+            f"<td style='padding:4px 8px;white-space:nowrap'>{label}</td></tr>"
+        )
+    scores = {
+        "TAO": metrics.tool_any_order(pred, gold),
+        "TIO": metrics.tool_in_order(pred, gold),
+        "TEM": metrics.tool_exact_match(pred, gold),
+        "ParamAcc": metrics.parameter_accuracy(pred, gold),
+        "calls": f"{len(pred)} vs {len(gold)}",
+    }
+    chips = " ".join(
+        f"<span style='border:1px solid currentColor;border-radius:10px;padding:1px 8px;margin-right:4px'>"
+        f"{name} <b>{value if isinstance(value, str) else f'{value:.2f}'}</b></span>"
+        for name, value in scores.items()
+    )
+    heading = f"<div style='font-weight:600;margin-bottom:4px'>{html.escape(title)}</div>" if title else ""
+    return (
+        f"<div style='font-size:13px;line-height:1.5'>{heading}<div style='margin:4px 0 8px'>{chips}</div>"
+        "<table style='border-collapse:collapse;width:100%'>"
+        "<thead><tr style='text-align:left;border-bottom:1px solid currentColor'>"
+        "<th style='padding:4px 8px'>#</th><th style='padding:4px 8px'>Expert</th>"
+        "<th style='padding:4px 8px'>Agent</th><th style='padding:4px 8px'>Step</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def compare_widget(runs: dict[str, list[dict[str, Any]]], gold: list[dict[str, Any]]) -> Any:
+    """A dropdown of runs; picking one shows its trace next to the expert's (``compare_html``)."""
+    import ipywidgets as widgets
+    from IPython.display import HTML, display
+
+    picker = widgets.Dropdown(options=list(runs), description="Run:", layout=widgets.Layout(width="420px"))
+    out = widgets.Output()
+
+    def show(name: str) -> None:
+        with out:
+            out.clear_output(wait=True)
+            display(HTML(compare_html(runs[name], gold, name)))
+
+    picker.observe(lambda change: show(change["new"]), names="value")
+    show(picker.value)
+    return widgets.VBox([picker, out])
+
+
+def sample_calls(sample: Any) -> list[dict[str, Any]]:
+    """The tool calls recorded for one sample of a log, as ``{"name", "input"}`` dicts."""
+    from agentic_evals.agents.trace_callback import read_trace
+
+    return [{"name": e["name"], "input": e["input"]} for e in read_trace(sample.store)]
+
+
 def _question_id(sample_id: Any) -> Any:
     try:
         return int(sample_id)
