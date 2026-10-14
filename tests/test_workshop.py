@@ -198,39 +198,23 @@ def test_rules_html_scores_one_run_under_both_parameter_rules():
     assert "skipped, not punished" in page and "after normalising" in page
 
 
-def test_judge_answer_reads_the_verdict_from_each_judge(monkeypatch):
-    import asyncio
+def test_scores_side_by_side_marks_the_answer_and_blanks_missing_metrics():
+    from workshop import scores_side_by_side
 
-    from inspect_ai.model import ModelOutput, get_model
-
-    from workshop import judge_answer
-
-    replies = iter([
-        '```json\n{"is_same_meaning": true, "reason": "C is 49.74%, about 50%"}\n```',
-        '{"is_same_meaning": false, "reason": "50% is not 49.74%"}',
-    ])
-
-    def fake_get_model(name, **_kwargs):
-        return get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm", next(replies))])
-
-    monkeypatch.setattr("inspect_ai.model.get_model", fake_get_model)
-    first = asyncio.run(judge_answer("judge/a", "q", "C. 49.74%", "about 50%"))
-    second = asyncio.run(judge_answer("judge/b", "q", "C. 49.74%", "about 50%"))
-    assert (first["score"], second["score"]) == (1, 0)
-    assert first["reason"].startswith("C is 49.74%")
+    page = scores_side_by_side({
+        "A": {"answer": "C", "gold": "C", "accuracy": 1.0, "tao": 1.0, "efficiency": 1.33},
+        "E": {"answer": "B", "gold": "C", "accuracy": 0.0, "tao": 0.67, "efficiency": 1.0, "tool_errors": 1},
+    }, "Five runs")
+    assert "Five runs" in page and "\u2713" in page and "\u2717" in page
+    assert "1.33" in page and "calls / expert" in page and "<b>1</b>" in page
+    assert "Tool-In-Order" not in page        # no run has the metric, so no row
 
 
-def test_judges_html_shows_both_scores_and_agreement():
-    from workshop import judges_html
+def test_table_html_shades_shares_and_marks_missing_values():
+    import pandas as pd
 
-    verdicts = [
-        {"judge": "openai-api/eve/eve/eve-esa/EVE-Instruct", "score": 1, "reason": "same value"},
-        {"judge": "openai-api/eve/jsc/alias-eve", "score": 0, "reason": "not the same value"},
-    ]
-    page = judges_html("Which share?", "C. 49.74%", "about 50%", verdicts)
-    assert "Judges disagree" in page and "EVE-Instruct" in page and "alias-eve" in page
-    assert "score 1: same meaning" in page and "score 0: different meaning" in page
-    agree = judges_html("q", "C", "C", [dict(verdicts[0], score=1), dict(verdicts[0], judge="x/y", score=1)])
-    assert "Judges agree" in agree
-    failed = judges_html("q", "C", "C", [dict(verdicts[0], score=None, reason="call failed")])
-    assert "Not enough verdicts" in failed and "no score" in failed
+    from workshop import table_html
+
+    frame = pd.DataFrame({"accuracy": [1.0, 0.0], "tao": [float("nan"), 0.5]}, index=[11, 2])
+    page = table_html(frame, ["accuracy", "tao"], "Baseline")
+    assert "Baseline" in page and "rgba(46,160,67,0.45)" in page and "opacity:.5" in page

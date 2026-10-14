@@ -532,106 +532,99 @@ def sample_calls(sample: Any) -> list[dict[str, Any]]:
     return [{"name": e["name"], "input": e["input"]} for e in read_trace(sample.store)]
 
 
-# Two judges, one answer, from two families. EVE-Instruct is on the workshop key.
-# ``jsc/alias-eve`` on the same key answers as EVE-Instruct too, so it is not a second judge.
-# The second judge needs OPENROUTER_API_KEY; without it that card shows the error instead.
-JUDGES: tuple[tuple[str, str | None], ...] = (
-    ("openai-api/eve/eve/eve-esa/EVE-Instruct", None),
-    ("openai-api/openrouter/openai/gpt-4.1-mini", "https://openrouter.ai/api/v1"),
+METRIC_ROWS: tuple[tuple[str, str, str], ...] = (
+    ("accuracy", "Accuracy", "share"),
+    ("tao", "Tool-Any-Order", "share"),
+    ("tio", "Tool-In-Order", "share"),
+    ("tem", "Tool-Exact-Match", "share"),
+    ("param_acc", "Parameter accuracy", "share"),
+    ("efficiency", "Efficiency", "ratio"),
+    ("tool_errors", "Tool errors", "count"),
 )
 
 
-def _json_object(text: str) -> dict[str, Any]:
-    """The JSON object in a judge reply, with a Markdown code fence removed if there is one."""
-    import json
+def scores_side_by_side(runs: dict[str, dict[str, Any]], title: str = "") -> str:
+    """Several runs (or one run and its mean) as columns, with each metric as a row.
 
-    cleaned = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    start, end = cleaned.find("{"), cleaned.rfind("}")
-    return json.loads(cleaned[start : end + 1])
-
-
-async def judge_answer(
-    model: str, question: str, gold: str, candidate: str, base_url: str | None = None
-) -> dict[str, Any]:
-    """One judge's verdict: does the candidate mean the same as the gold answer?
-
-    The prompt is EO-Gym's semantic-equivalence judge (``eo_gym.scorers``), applied
-    to Earth-Bench answers. ``score`` is 1 when the judge says same meaning, 0 when
-    it says different, and None when the reply cannot be read or the call fails.
+    A run value may carry ``answer`` and ``gold``: the first row then shows the
+    answer and whether it matches. Share metrics get a bar; efficiency is a
+    ratio; tool errors is a count.
     """
-    import json
-
-    from inspect_ai.model import ChatMessageSystem, ChatMessageUser, GenerateConfig, get_model
-
-    from agentic_evals.tasks.eo_gym.scorers import SEMANTIC_FINAL_ANSWER_JUDGE_SYSTEM_PROMPT
-
-    payload = {"question": question, "reference_final_answer": gold, "candidate_final_answer": candidate}
-    try:
-        output = await get_model(model, base_url=base_url).generate(
-            [
-                ChatMessageSystem(content=SEMANTIC_FINAL_ANSWER_JUDGE_SYSTEM_PROMPT),
-                ChatMessageUser(content=json.dumps(payload, ensure_ascii=False)),
-            ],
-            config=GenerateConfig(temperature=0, max_tokens=512, max_retries=3, attempt_timeout=120),
-        )
-    except Exception as exc:  # noqa: BLE001 - a failed judge is shown on its card, not raised
-        return {"judge": model, "score": None, "reason": f"call failed: {type(exc).__name__}: {str(exc)[:160]}"}
-    try:
-        data = _json_object(output.completion)
-        same = bool(data["is_same_meaning"])
-    except (ValueError, KeyError, TypeError):
-        return {"judge": model, "score": None, "reason": f"unreadable reply: {output.completion[:160]}"}
-    return {"judge": model, "score": int(same), "reason": str(data.get("reason", "")).strip() or "no reason given"}
-
-
-def judges_html(question: str, gold: str, candidate: str, verdicts: list[dict[str, Any]]) -> str:
-    """The gold and candidate answers, with each judge's score and reason, and whether the judges agree."""
     import html
 
-    scores = [v["score"] for v in verdicts]
-    scored = [s for s in scores if s is not None]
-    if len(scored) < 2:
-        agreement = ("Not enough verdicts to compare", "#8b949e")
-    elif len(set(scored)) == 1:
-        agreement = ("Judges agree", "#2ea043")
-    else:
-        agreement = ("Judges disagree", "#d29922")
-
-    def answer_card(label: str, text: str, colour: str) -> str:
-        return (
-            f"<div style='flex:1 1 300px;border-left:4px solid {colour};background:rgba(128,128,128,.10);"
-            "border-radius:8px;padding:8px 12px;min-width:0'>"
-            f"<div style='font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7'>{label}</div>"
-            f"<div style='font-size:14px;margin-top:3px;overflow-wrap:anywhere'>{html.escape(text)}</div></div>"
-        )
-
-    def verdict_card(v: dict[str, Any]) -> str:
-        score = v["score"]
-        if score is None:
-            colour, chip, word = "#8b949e", "?", "no score"
-        elif score == 1:
-            colour, chip, word = "#2ea043", "\u2713", "same meaning"
-        else:
-            colour, chip, word = "#f85149", "\u2717", "different meaning"
-        name = v["judge"].split("/")[-1]
-        return (
-            f"<div style='flex:1 1 300px;border:1px solid rgba(128,128,128,.35);border-radius:10px;padding:10px 12px;min-width:0'>"
-            "<div style='display:flex;align-items:center;gap:10px'>"
-            f"<div style='width:34px;height:34px;border-radius:17px;background:{colour};color:#fff;font-weight:700;"
-            f"font-size:17px;display:flex;align-items:center;justify-content:center'>{chip}</div>"
-            f"<div><div style='font-weight:700;font-family:ui-monospace,Menlo,monospace'>{html.escape(name)}</div>"
-            f"<div style='font-size:12px;opacity:.8'>score {'-' if score is None else score}: {word}</div></div></div>"
-            f"<div style='font-size:12.5px;line-height:1.45;margin-top:8px;opacity:.9'>{html.escape(v['reason'])}</div></div>"
-        )
-
+    names = list(runs)
+    head = "".join(
+        f"<th style='padding:6px 10px;text-align:left;border-bottom:1px solid rgba(128,128,128,.4)'>{html.escape(n)}</th>"
+        for n in names
+    )
+    rows = []
+    if any("answer" in runs[n] for n in names):
+        cells = []
+        for n in names:
+            r = runs[n]
+            if "answer" not in r:
+                cells.append("<td></td>")
+                continue
+            ok = r.get("answer") == r.get("gold")
+            colour = "#2ea043" if ok else "#f85149"
+            mark = "\u2713" if ok else "\u2717"
+            cells.append(
+                f"<td style='padding:6px 10px'><span style='color:{colour};font-weight:700'>{mark}</span> "
+                f"answer <b>{html.escape(str(r['answer']))}</b> <span style='opacity:.7'>(gold {html.escape(str(r.get('gold')))})</span></td>"
+            )
+        rows.append("<tr><td style='padding:6px 10px;opacity:.75'>Answer</td>" + "".join(cells) + "</tr>")
+    for key, label, kind in METRIC_ROWS:
+        if not any(key in runs[n] for n in names):
+            continue
+        cells = []
+        for n in names:
+            value = runs[n].get(key)
+            if value is None or value != value:  # missing or NaN
+                cells.append("<td style='padding:6px 10px;opacity:.5'>-</td>")
+            elif kind == "share":
+                width = max(0.0, min(1.0, float(value))) * 100
+                cells.append(
+                    "<td style='padding:6px 10px;min-width:120px'>"
+                    f"<div style='font-weight:700'>{float(value):.2f}</div>"
+                    "<div style='height:6px;border-radius:3px;background:rgba(128,128,128,.25);margin-top:3px'>"
+                    f"<div style='height:6px;border-radius:3px;width:{width:.0f}%;background:#2ea043'></div></div></td>"
+                )
+            elif kind == "ratio":
+                cells.append(f"<td style='padding:6px 10px'><b>{float(value):.2f}</b> <span style='opacity:.6'>calls / expert</span></td>")
+            else:
+                cells.append(f"<td style='padding:6px 10px'><b>{float(value):g}</b></td>")
+        rows.append(f"<tr style='border-top:1px solid rgba(128,128,128,.2)'><td style='padding:6px 10px;opacity:.85;white-space:nowrap'>{label}</td>{''.join(cells)}</tr>")
+    heading = f"<div style='font-size:14px;font-weight:700;margin-bottom:6px'>{html.escape(title)}</div>" if title else ""
     return (
-        "<div style='font-size:13px;line-height:1.45;max-width:980px'>"
-        f"<div style='font-size:14px;font-weight:700;margin-bottom:6px'>{html.escape(question)}</div>"
-        f"<div style='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px'>"
-        f"{answer_card('Gold answer', gold, '#8250df')}{answer_card('Candidate answer', candidate, '#0969da')}</div>"
-        f"<div style='display:inline-block;border:1px solid {agreement[1]};color:{agreement[1]};border-radius:12px;"
-        f"padding:2px 10px;font-weight:600;margin-bottom:10px'>{agreement[0]}</div>"
-        f"<div style='display:flex;flex-wrap:wrap;gap:8px'>{''.join(verdict_card(v) for v in verdicts)}</div></div>"
+        "<div style='font-size:13px;line-height:1.45'>"
+        f"{heading}<table style='border-collapse:collapse'><thead><tr><th style='padding:6px 10px'></th>{head}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def table_html(frame: Any, columns: list[str], title: str = "") -> str:
+    """A results table with each share cell shaded by its value (0 white, 1 full green)."""
+    import html
+
+    head = "".join(f"<th style='padding:5px 10px;text-align:right;border-bottom:1px solid rgba(128,128,128,.4)'>{html.escape(c)}</th>" for c in columns)
+    body = []
+    for index, row in frame.iterrows():
+        cells = []
+        for c in columns:
+            value = row[c]
+            if value != value:
+                cells.append("<td style='padding:5px 10px;text-align:right;opacity:.5'>-</td>")
+                continue
+            shade = max(0.0, min(1.0, float(value))) * 0.45
+            cells.append(
+                f"<td style='padding:5px 10px;text-align:right;background:rgba(46,160,67,{shade:.2f})'>{float(value):.2f}</td>"
+            )
+        body.append(f"<tr><td style='padding:5px 10px;font-weight:600'>{html.escape(str(index))}</td>{''.join(cells)}</tr>")
+    heading = f"<div style='font-size:14px;font-weight:700;margin-bottom:6px'>{html.escape(title)}</div>" if title else ""
+    return (
+        "<div style='font-size:13px'>"
+        f"{heading}<table style='border-collapse:collapse'><thead><tr><th style='padding:5px 10px;text-align:left'>Question</th>{head}</tr></thead>"
+        f"<tbody>{''.join(body)}</tbody></table></div>"
     )
 
 
