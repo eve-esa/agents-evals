@@ -180,7 +180,43 @@ def run_anatomy():
     plt.close(fig)
 
 
+def trajectory_q11():
+    """The gold trajectory of Earth-Bench question 11: three expert calls, in order."""
+    fig, ax = plt.subplots(figsize=(11, 3.6))
+    ax.set_xlim(0, 14.2)
+    ax.set_ylim(0, 4.2)
+    ax.axis("off")
+    ax.text(0.0, 3.95, "A trajectory: the expert's tool calls for Earth-Bench question 11", fontsize=13,
+            fontweight="bold", color=INK, va="center")
+    ax.text(0.0, 3.55, "\u201cProportion of the Tokyo area with land surface temperature above 310 K?\u201d  "
+            "Each card is one call, in order.", fontsize=9.5, color=MUTED, va="center")
+    calls = [
+        ("get_filelist", ["dir_path: benchmark/data/question11"]),
+        ("lst_multi_channel", ["band31_path: .../BT_31.tif", "band32_path: .../BT_32.tif",
+                               "output_path: question11/lst_0110.tif"]),
+        ("calculate_threshold_ratio", ["image_paths: [.../lst_0110.tif]", "threshold: 310.0"]),
+    ]
+    xs = [0.1, 4.85, 9.6]
+    w, h, top = 4.4, 2.3, 0.9
+    for i, ((name, args), x) in enumerate(zip(calls, xs), 1):
+        card(ax, x, top, w, h, bar=GREY)
+        ax.add_patch(Circle((x + 0.55, top + h - 0.42), 0.27, fc=BLUE, ec="none", zorder=5))
+        ax.text(x + 0.55, top + h - 0.43, str(i), ha="center", va="center", color="white", fontsize=10,
+                fontweight="bold", zorder=6)
+        ax.text(x + 1.0, top + h - 0.42, name, fontsize=9.5, va="center", zorder=5, fontweight="bold", **MONO)
+        for j, arg in enumerate(args):
+            ax.text(x + 0.3, top + h - 0.95 - j * 0.42, arg, fontsize=7.3, va="center", zorder=5, **MONO, color=INK)
+        if i < len(calls):
+            ax.annotate("", xy=(x + w + 0.42, top + h / 2), xytext=(x + w + 0.08, top + h / 2),
+                        arrowprops=dict(arrowstyle="->", color=GREY, lw=1.6))
+    ax.text(0.2, 0.35, "The reference trajectory. Long paths shortened with \u2026. The agent's trajectory is compared with it step by step (section I.1).",
+            fontsize=8.8, color=MUTED, va="center")
+    fig.savefig(OUT / "trajectory_q11.png", dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     pass_at_k_tree()
     run_anatomy()
-    print("wrote", OUT / "pass_at_k_tree.png", OUT / "run_anatomy.png")
+    trajectory_q11()
+    print("wrote figures in", OUT)
