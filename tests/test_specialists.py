@@ -829,3 +829,26 @@ def test_weave_recorder_nests_a_specialist_under_the_ask_call():
     assert by_name["calc_ndvi"].output == {"output": "0.42", "error": False}
     assert by_name["veg"].output == {"answer": "NDVI = 0.42"}
     assert all(c.output is not None for c in client.calls)
+
+
+def test_a_replayed_specialist_history_keeps_the_reply_after_a_tool_result():
+    # A follow-up to a specialist resends its history. Inspect folds
+    # assistant[tool_calls, content=null] -> tool -> assistant[text] into one message,
+    # which ends the history "tool, user" (HTTP 400 from Mistral templates).
+    from inspect_ai.model._openai import messages_from_openai
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+
+    from agentic_evals.agents.langgraph_react import inspect_chat_model
+
+    history = [
+        SystemMessage("You are a raster specialist."),
+        HumanMessage("Share of pixels above 310 K in a.tif?"),
+        AIMessage("", tool_calls=[{"name": "calculate_threshold_ratio", "args": {}, "id": "c1"}]),
+        ToolMessage("a.tif: No such file", tool_call_id="c1"),
+        AIMessage("NEEDS_INPUT: the path of the image"),
+        HumanMessage("The image is b.tif."),
+    ]
+    payload = inspect_chat_model()._get_request_payload(history)
+    messages = asyncio.run(messages_from_openai(payload["messages"]))
+    assert [m.role for m in messages] == ["system", "user", "assistant", "tool", "assistant", "user"]
+    assert messages[2].text == "" and messages[4].text == "NEEDS_INPUT: the path of the image"

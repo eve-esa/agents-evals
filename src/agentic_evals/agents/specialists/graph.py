@@ -44,13 +44,13 @@ from inspect_ai.agent import Agent, AgentState, agent, agent_bridge
 from inspect_ai.model import ChatMessageUser
 from inspect_ai.util import store
 from langchain.agents import create_agent
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agentic_evals.agents.langgraph_react import (
     TERMINATION_KEY,
     _message_text,
     default_middleware,
+    inspect_chat_model,
     load_task_mcp_tools,
     run_graph,
 )
@@ -254,7 +254,7 @@ def langgraph_specialists(
                     owned = [by_name[t] for t in spec.tools]
                     prompts[spec.slug] = specialist_prompt(spec, question)
                     graphs[spec.slug] = graph = create_agent(
-                        ChatOpenAI(model="inspect", api_key="inspect"),
+                        inspect_chat_model(),
                         tools=owned,
                         system_prompt=prompts[spec.slug],
                         middleware=default_middleware(None),
@@ -273,7 +273,7 @@ def langgraph_specialists(
                 urls = await stack.enter_async_context(serve(agents))
                 http = await stack.enter_async_context(httpx.AsyncClient(timeout=TIMEOUT_S))
                 orchestrator = create_agent(
-                    ChatOpenAI(model="inspect", api_key="inspect"),
+                    inspect_chat_model(),
                     tools=[*await ask_tools(urls, http), *(by_name[t] for t in orchestrator_tools)],
                     middleware=default_middleware(max_model_calls),
                     name=name,

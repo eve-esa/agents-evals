@@ -315,6 +315,30 @@ async def load_task_mcp_tools(stack: AsyncExitStack) -> list[BaseTool]:
     return await load_mcp_tools_from(mcp_servers(), stack)
 
 
+class InspectChatOpenAI(ChatOpenAI):
+    """``ChatOpenAI`` for ``agent_bridge()``: a tool-calling message is sent with ``""`` as content, not ``null``.
+
+    Inspect's ``messages_from_openai`` (``openai_assistant_message_reducer``)
+    folds ``assistant[tool_calls, content=null] -> tool -> assistant[text]`` into
+    one message, for scaffolds that split a turn that way. A replayed history (a
+    follow-up to an A2A specialist) then loses the reply and ends ``tool, user``,
+    which Mistral chat templates reject with HTTP 400. Inspect reads ``""`` the
+    same as ``null`` and does not fold it.
+    """
+
+    def _get_request_payload(self, input_: Any, *, stop: list[str] | None = None, **kwargs: Any) -> dict:
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        for message in payload.get("messages") or []:
+            if message.get("role") == "assistant" and message.get("tool_calls") and message.get("content") is None:
+                message["content"] = ""
+        return payload
+
+
+def inspect_chat_model() -> ChatOpenAI:
+    """The chat model ``agent_bridge()`` routes to the eval's ``--model``."""
+    return InspectChatOpenAI(model="inspect", api_key="inspect")
+
+
 def default_middleware(max_model_calls: int | None) -> list[AgentMiddleware]:
     middleware: list[AgentMiddleware] = [
         NormalizeMistralToolCalls(),
@@ -407,7 +431,7 @@ async def _execute(state: AgentState, graph: GraphFactory, *, recursion_limit: i
         async with AsyncExitStack() as stack:
             tools = await load_task_mcp_tools(stack)
             # ChatOpenAI(model="inspect") is routed by agent_bridge to the eval's --model.
-            compiled = graph(ChatOpenAI(model="inspect", api_key="inspect"), tools)
+            compiled = graph(inspect_chat_model(), tools)
             weave = [r for r in (weave_recorder(), langfuse_handler()) if r is not None]
             termination = await run_graph(compiled, bridge, state, recorder, recursion_limit, callbacks=[recorder, *weave])
         recorder.save()
