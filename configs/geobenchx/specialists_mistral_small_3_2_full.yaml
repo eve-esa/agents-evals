@@ -1,0 +1,49 @@
+# Full GeoBenchX (all 202 tasks) with the orchestrator and A2A specialists (agents/specialists),
+# Mistral Small 3.2 24B Instruct via OpenRouter, pinned to venice (the only host
+# with a 256k context; see the geobenchx task docstring).
+#
+# The solver reads the committed clusters/geobenchx.json (k-means, number of
+# specialists picked by silhouette), so no embedding call is made. GeoBenchX has
+# no get_filelist tool. The orchestrator keeps reject_task itself, so the
+# task_triage specialist (which only held reject_task) is not run; a specialist
+# left with no tools is dropped (graph.without_tools).
+#
+# Temperature 0 as in upstream's execute_task. The grader is GPT-4.1, the
+# model that scored evaluator_tuning_set.json, through OpenRouter.
+#
+# All samples, ten at a time. Each sample's orchestrator run, specialists
+# included, stops after 5 minutes (time_limit_s; termination time_limit).
+#
+#   uv run inspect eval --run-config configs/geobenchx/specialists_mistral_small_3_2_full.yaml --display plain
+
+task:
+  task: agentic_evals/geobenchx
+  args:
+    openrouter_only: venice
+
+solver:
+  solver: agentic_evals/langgraph_specialists
+  args:
+    orchestrator_tools: [reject_task]
+    time_limit_s: 300
+
+model:
+  model: openai-api/openrouter/mistralai/mistral-small-3.2-24b-instruct
+  base_url: https://openrouter.ai/api/v1
+  args:
+    strict_tools: false
+
+model_roles:
+  grader:
+    model: openai-api/openrouter/openai/gpt-4.1
+    base_url: https://openrouter.ai/api/v1
+
+generate_config:
+  temperature: 0
+  max_tokens: -1
+  max_retries: 5
+
+eval_config:
+  epochs: 1
+  max_samples: 10
+  fail_on_error: false
