@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from contextlib import AsyncExitStack
 from typing import Any
 from uuid import uuid4
@@ -383,13 +384,64 @@ async def run_graph(
     return termination
 
 
+# (routed chat model, MCP tools) -> compiled LangGraph.
+GraphFactory = Callable[[ChatOpenAI, list[BaseTool]], Any]
+
+
+def react_graph(
+    llm: ChatOpenAI,
+    tools: list[BaseTool],
+    *,
+    max_model_calls: int | None = None,
+    name: str = "langgraph_react",
+) -> Any:
+    """Baseline ReAct graph: ``create_agent`` with Mistral tool-call repair and image forwarding."""
+    return create_agent(llm, tools=tools, middleware=default_middleware(max_model_calls), name=name)
+
+
+async def _execute(state: AgentState, graph: GraphFactory, *, recursion_limit: int, name: str) -> AgentState:
+    """Open this sample's MCP tools, run ``graph(llm, tools)``, and store the trace."""
+    recorder = TraceRecorder(agent_name=name)
+    async with agent_bridge(state) as bridge:
+        async with AsyncExitStack() as stack:
+            tools = await load_task_mcp_tools(stack)
+            # ChatOpenAI(model="inspect") is routed by agent_bridge to the eval's --model.
+            compiled = graph(ChatOpenAI(model="inspect", api_key="inspect"), tools)
+            weave = [r for r in (weave_recorder(),) if r is not None]
+            termination = await run_graph(compiled, bridge, state, recorder, recursion_limit, callbacks=[recorder, *weave])
+        recorder.save()
+        store().set(TERMINATION_KEY, termination)
+        return bridge.state
+
+
+@agent
+def langgraph_agent(graph: GraphFactory, recursion_limit: int = 50, name: str = "langgraph") -> Agent:
+    """Evaluate a LangGraph the caller built.
+
+    ``graph(llm, tools)`` must return a compiled graph whose state has a
+    ``messages`` key. ``llm`` is already routed to the eval model. Tool errors
+    are returned to the model, and every tool call is written to the sample
+    trace the scorers read.
+
+    Args:
+        graph: ``(llm, tools) -> compiled graph``, e.g. one written in the workshop notebook.
+        recursion_limit: LangGraph super-step limit (upstream Earth-Agent uses 50).
+        name: Agent name recorded on every trace entry.
+    """
+
+    async def execute(state: AgentState) -> AgentState:
+        return await _execute(state, graph, recursion_limit=recursion_limit, name=name)
+
+    return execute
+
+
 @agent
 def langgraph_react(
     recursion_limit: int = 50,
     max_model_calls: int | None = None,
     name: str = "langgraph_react",
 ) -> Agent:
-    """LangGraph ReAct agent over the task's MCP tools.
+    """LangGraph ReAct agent over the task's MCP tools (``react_graph`` run by ``langgraph_agent``).
 
     Args:
         recursion_limit: LangGraph super-step limit (upstream Earth-Agent uses 50).
@@ -402,21 +454,10 @@ def langgraph_react(
         name: Agent name recorded on every trace entry.
     """
 
+    def graph(llm: ChatOpenAI, tools: list[BaseTool]) -> Any:
+        return react_graph(llm, tools, max_model_calls=max_model_calls, name=name)
+
     async def execute(state: AgentState) -> AgentState:
-        recorder = TraceRecorder(agent_name=name)
-        async with agent_bridge(state) as bridge:
-            async with AsyncExitStack() as stack:
-                tools = await load_task_mcp_tools(stack)
-                graph = create_agent(
-                    ChatOpenAI(model="inspect", api_key="inspect"),
-                    tools=tools,
-                    middleware=default_middleware(max_model_calls),
-                    name=name,
-                )
-                weave = [r for r in (weave_recorder(),) if r is not None]
-                termination = await run_graph(graph, bridge, state, recorder, recursion_limit, callbacks=[recorder, *weave])
-            recorder.save()
-            store().set(TERMINATION_KEY, termination)
-            return bridge.state
+        return await _execute(state, graph, recursion_limit=recursion_limit, name=name)
 
     return execute

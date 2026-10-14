@@ -1,0 +1,38 @@
+# Earth-Bench workshop baseline: the ten Spectrum auto-planning questions of
+# sagemaker/workshop.py (WORKSHOP_QUESTIONS), EVE through its OpenAI-compatible
+# endpoint, the default LangGraph ReAct solver.
+#
+# This is the same run the hands-on notebook makes with workshop.run(), written
+# as a run config. Earth-Bench does not publish this subset; see workshop.py.
+#
+# Inspect reads EVE_API_KEY and EVE_BASE_URL from .env in the working directory.
+# Rasters for these questions:
+#   uv run python scripts/setup_benchmark.py earth-bench --questions 11,2,7,8,19,21,26,31,36,42
+# Then:
+#   uv run inspect eval --run-config configs/workshop_earth_bench_eve.yaml
+
+task:
+  task: agentic_evals/earth_bench
+  args:
+    regime: ap
+    modality: spectrum
+
+model:
+  model: openai-api/eve/jsc/alias-eve
+  args:
+    strict_tools: false
+
+generate_config:
+  # Upstream Earth-Agent runners use temperature 0.1 (also the task default).
+  temperature: 0.1
+  # An unset max_tokens makes this endpoint reserve the rest of the context
+  # as output (see scorers/judges.py).
+  max_tokens: 4096
+  attempt_timeout: 180
+  stream_idle_timeout: 60
+  max_retries: 2
+
+eval_config:
+  sample_id: [11, 2, 7, 8, 19, 21, 26, 31, 36, 42]
+  epochs: 1
+  max_samples: 4
