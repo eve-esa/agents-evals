@@ -20,10 +20,13 @@ from agentic_evals.agents.weave_trace import CALLER_RUN_ID
 ENV_KEYS = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
 
 
-def _nesting_handler() -> type:
+def _nesting_handler(attributes: dict[str, Any] | None = None) -> type:
     from langfuse.langchain import CallbackHandler
 
     class NestingHandler(CallbackHandler):
+        def _parse_langfuse_trace_attributes(self, *, metadata: Any, tags: Any) -> dict[str, Any]:
+            return {**super()._parse_langfuse_trace_attributes(metadata=metadata, tags=tags), **(attributes or {})}
+
         def _take_root_trace_context(self, *, inputs: Any, metadata: dict[str, Any] | None) -> tuple[Any, Any]:
             # Overrides a private hook of the pinned langfuse: where a root run attaches.
             try:
@@ -38,14 +41,36 @@ def _nesting_handler() -> type:
     return NestingHandler
 
 
+def sample_trace_id(sample_uuid: str) -> str:
+    """The Langfuse trace id of a sample; ``agents.langfuse_scores`` derives the same one to attach scores."""
+    from langfuse import Langfuse
+
+    return Langfuse.create_trace_id(seed=sample_uuid)
+
+
 def langfuse_handler() -> Any | None:
-    """A handler for one sample's trace, or ``None`` when Langfuse is not configured."""
+    """A handler for one sample's trace, or ``None`` when Langfuse is not configured.
+
+    Inside an Inspect sample the trace id comes from the sample's uuid, and the
+    trace is named ``<task>/<sample id>`` in the session of the eval run, tagged
+    with task, model and epoch.
+    """
     if not all(os.environ.get(key) for key in ENV_KEYS):
         return None
     from langfuse import Langfuse
     if not os.environ.get("LANGFUSE_HOST") and os.environ.get("LANGFUSE_BASE_URL"):
         os.environ["LANGFUSE_HOST"] = os.environ["LANGFUSE_BASE_URL"]
-    return _nesting_handler()(trace_context={"trace_id": Langfuse.create_trace_id(seed=uuid.uuid4().hex)})
+    from inspect_ai.log._samples import sample_active
+
+    active = sample_active()
+    if active is None:
+        return _nesting_handler()(trace_context={"trace_id": sample_trace_id(uuid.uuid4().hex)})
+    attributes = {
+        "session_id": active.run_id,
+        "trace_name": f"{active.task}/{active.sample.id}",
+        "tags": [active.task, active.model, f"epoch-{active.epoch}"],
+    }
+    return _nesting_handler(attributes)(trace_context={"trace_id": sample_trace_id(active.sample_uuid)})
 
 
 def flush_langfuse() -> None:

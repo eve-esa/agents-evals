@@ -6,6 +6,7 @@ Anything imported here is addressable by name, e.g.
 
 # ruff: noqa: F401
 
+from agentic_evals.agents.langfuse_scores import LangfuseScores as _langfuse_scores
 from agentic_evals.agents.langgraph_react import langgraph_react
 from agentic_evals.agents.specialists import langgraph_specialists
 from agentic_evals.max_tokens import UncappedMaxTokens as _uncapped_max_tokens

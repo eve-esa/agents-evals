@@ -14,3 +14,22 @@ def test_handler_pins_one_trace_per_sample(monkeypatch):
     monkeypatch.setenv("LANGFUSE_BASE_URL", "http://localhost:1")
     first, second = langfuse_handler(), langfuse_handler()
     assert first._trace_context["trace_id"] != second._trace_context["trace_id"]
+
+
+def test_scores_keep_each_scorer_and_key_separate():
+    from inspect_ai.scorer import Score
+
+    from agentic_evals.agents.langfuse_scores import langfuse_scores
+
+    rows = langfuse_scores(
+        {
+            "geobenchx_scorer": Score(value={"tao": 1.0, "match": True}, explanation="ok"),
+            "judge": Score(value="C"),
+            "skipped": Score(value={"missing": None}),
+        }
+    )
+    assert [(r["name"], r["value"], r["data_type"]) for r in rows] == [
+        ("geobenchx_scorer/tao", 1.0, "NUMERIC"),
+        ("geobenchx_scorer/match", 1.0, "BOOLEAN"),
+        ("judge", "C", "CATEGORICAL"),
+    ]
