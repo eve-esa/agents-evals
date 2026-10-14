@@ -1,6 +1,6 @@
 # Earth-Bench with the orchestrator and A2A specialists (agents/specialists),
 # Qwen3-235B-A22B-Instruct-2507 via OpenRouter. Same task, solver and generate
-# settings as earth_bench_specialists_qwen3_32b.yaml, so the two runs differ only
+# settings as specialists_qwen3_32b.yaml, so the two runs differ only
 # in the model. The 2507 instruct model has no thinking mode, so there is no
 # reasoning switch here.
 #
@@ -11,7 +11,7 @@
 # [tool.inspect-wandb] in pyproject.toml; set INSPECT_WANDB_WEAVE_ENABLED=false to
 # turn Weave off for a run.
 #
-#   uv run inspect eval --run-config configs/earth_bench_specialists_qwen3_235b.yaml --display plain
+#   uv run inspect eval --run-config configs/earth_bench/specialists_qwen3_235b.yaml --display plain
 
 task:
   task: agentic_evals/earth_bench

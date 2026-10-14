@@ -1,13 +1,17 @@
 # Earth-Bench with the orchestrator and A2A specialists (agents/specialists),
-# Qwen3-32B via OpenRouter, same model and generate settings as
-# earth_bench_qwen3_32b.yaml so the two runs differ only in the solver.
+# Mistral Small 3.2 24B Instruct via OpenRouter. Same task, solver and generate
+# settings as specialists_qwen3_32b.yaml, so the two runs differ only
+# in the model. The model has no thinking mode, so there is no
+# reasoning switch here.
 #
 # The solver reads the committed clusters/earth_bench.json, so no embedding
 # call is made. Each specialist's model calls go through the eval's model.
 #
-# Ten questions, five at a time. The rasters for 1-10 are under data/earth_bench on the pod.
+# Ten questions, five at a time. Weave and W&B model logging are on through
+# [tool.inspect-wandb] in pyproject.toml; set INSPECT_WANDB_WEAVE_ENABLED=false to
+# turn Weave off for a run.
 #
-#   uv run inspect eval --run-config configs/earth_bench_specialists_qwen3_32b.yaml --display plain
+#   uv run inspect eval --run-config configs/earth_bench/specialists_mistral_small_3_2.yaml --display plain
 
 task:
   task: agentic_evals/earth_bench
@@ -18,7 +22,7 @@ task:
 solver: agentic_evals/langgraph_specialists
 
 model:
-  model: openai-api/openrouter/qwen/qwen3-32b
+  model: openai-api/openrouter/mistralai/mistral-small-3.2-24b-instruct
   base_url: https://openrouter.ai/api/v1
   args:
     strict_tools: false
@@ -27,9 +31,6 @@ generate_config:
   temperature: 0.1
   max_tokens: -1
   max_retries: 5
-  extra_body:
-    reasoning:
-      enabled: false
 
 eval_config:
   sample_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

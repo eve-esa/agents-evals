@@ -13,7 +13,7 @@
 #
 # Only questions 1-5 have rasters under third_party/Earth-Agent/benchmark/data/.
 #
-#   uv run inspect eval --run-config configs/earth_bench_deepseek_v3_1.yaml --display plain
+#   uv run inspect eval --run-config configs/earth_bench/deepseek_v3_1.yaml --display plain
 
 task:
   task: agentic_evals/earth_bench

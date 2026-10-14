@@ -23,7 +23,7 @@
 # question's five tool servers use about 1 GB, so eight leaves headroom for
 # raster spikes. The pod has 4 CPUs.
 #
-#   uv run inspect eval --run-config configs/earth_bench_qwen3_32b_full.yaml --display plain
+#   uv run inspect eval --run-config configs/earth_bench/qwen3_32b_full.yaml --display plain
 
 task:
   task: agentic_evals/earth_bench

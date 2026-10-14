@@ -9,7 +9,7 @@
 # Rasters for these questions:
 #   uv run python scripts/setup_benchmark.py earth-bench --questions 11,2,7,8,19,21,26,31,36,42
 # Then:
-#   uv run inspect eval --run-config configs/workshop_earth_bench_eve.yaml
+#   uv run inspect eval --run-config configs/earth_bench/workshop_eve.yaml
 
 task:
   task: agentic_evals/earth_bench

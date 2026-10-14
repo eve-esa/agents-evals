@@ -13,7 +13,7 @@
 # Key (not stored here). Inspect reads .env from this directory:
 #   cp .env.example .env
 # then:
-#   uv run inspect eval --run-config configs/earth_bench_qwen3_32b.yaml
+#   uv run inspect eval --run-config configs/earth_bench/qwen3_32b.yaml
 
 task:
   task: agentic_evals/earth_bench

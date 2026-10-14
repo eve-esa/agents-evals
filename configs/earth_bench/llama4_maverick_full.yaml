@@ -19,7 +19,7 @@
 # max_samples 8 runs eight questions at once. The pod cgroup is 16 GB and one
 # question's five tool servers use about 1 GB. The pod has 4 CPUs.
 #
-#   uv run inspect eval --run-config configs/earth_bench_llama4_maverick_full.yaml --display plain
+#   uv run inspect eval --run-config configs/earth_bench/llama4_maverick_full.yaml --display plain
 
 task:
   task: agentic_evals/earth_bench
