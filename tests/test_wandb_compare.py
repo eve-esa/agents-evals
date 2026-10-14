@@ -118,6 +118,10 @@ def test_summary_keys_and_results_table() -> None:
         model_run_name("openai-api/openrouter/qwen/qwen3.8-27b", "geobenchx")
         == "qwen3.8-27b_geobenchx"
     )
+    assert (
+        model_run_name("openai-api/openrouter/mistralai/mistral-small-3.2-24b-instruct", "earth_bench", "langgraph_specialists")
+        == "mistral-small-3.2-24b-instruct_earth_bench_langgraph_specialists"
+    )
     rows = results_rows(scores, "geobenchx")
     assert list(rows[0]) == list(METRICS_COLUMNS)
     by_metric = {row["metric"]: row for row in rows}

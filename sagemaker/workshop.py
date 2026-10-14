@@ -408,6 +408,109 @@ def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: 
     )
 
 
+def _row_html(num: str, left: str, icon: tuple[str, str, str], right: str, note: str = "", dim: bool = False) -> str:
+    colour, glyph, label = icon
+    opacity = "opacity:.45;" if dim else ""
+    return (
+        f"<div style='display:grid;grid-template-columns:28px minmax(0,1fr) 34px minmax(0,1fr) 150px;gap:8px;align-items:center;{opacity}'>"
+        f"<div style='text-align:center;opacity:.6;font-size:12px'>{num}</div>{left}"
+        f"<div title='{label}' style='width:26px;height:26px;border-radius:13px;background:{colour};color:#fff;font-weight:700;"
+        f"display:flex;align-items:center;justify-content:center'>{glyph}</div>{right}"
+        f"<div style='font-size:11.5px;opacity:.8'>{note}</div></div>"
+    )
+
+
+def _panel_html(title: str, rule: str, tile: str, rows: list[str]) -> str:
+    return (
+        "<div style='border:1px solid rgba(128,128,128,.35);border-radius:10px;padding:10px 12px;margin-bottom:12px'>"
+        "<div style='display:flex;gap:12px;align-items:stretch;margin-bottom:8px'>"
+        f"<div style='flex:1'><div style='font-size:14px;font-weight:700'>{title}</div>"
+        f"<div style='font-size:12px;opacity:.8;margin-top:2px'>{rule}</div></div><div style='width:170px'>{tile}</div></div>"
+        "<div style='display:grid;grid-template-columns:28px minmax(0,1fr) 34px minmax(0,1fr) 150px;gap:8px;font-size:11px;"
+        "text-transform:uppercase;letter-spacing:.05em;opacity:.65;margin-bottom:4px'><div></div><div>Expert</div><div></div>"
+        "<div>Agent</div><div></div></div>"
+        f"<div style='display:flex;flex-direction:column;gap:6px'>{''.join(rows)}</div></div>"
+    )
+
+
+def rules_html(expected: list[Any], actual: list[Any]) -> str:
+    """Parameter accuracy of one run under two rules, drawn like ``compare_html``.
+
+    ``expected`` and ``actual`` are ``eo_gym.metrics.Step`` lists (name, arguments,
+    observation). Earth-Bench lines calls up by position and stops at the first
+    step that fails; EO-Gym aligns each expert step with the first later call of
+    the same tool, normalises both sides, and compares arguments and observation.
+    """
+    from agentic_evals.tasks.earth_bench import metrics as earth_bench
+    from agentic_evals.tasks.eo_gym import metrics as eo_gym
+
+    def as_call(step: Any) -> dict[str, Any]:
+        return {"name": step.name, "input": step.arguments}
+
+    # Earth-Bench: position by position, stop at the first mismatch.
+    exp_calls, act_calls = [as_call(x) for x in expected], [as_call(x) for x in actual]
+    stopped = False
+    rows = []
+    for i in range(max(len(exp_calls), len(act_calls))):
+        g = exp_calls[i] if i < len(exp_calls) else None
+        p = act_calls[i] if i < len(act_calls) else None
+        if g is None:
+            status, note = "extra", "extra call, not scored"
+        elif p is None:
+            status, note = "missing", "expert step never made"
+        elif p["name"] != g["name"]:
+            status, note = "tool", "different tool: nothing to compare the arguments with"
+        elif p["input"] == g["input"]:
+            status, note = "match", "tool and arguments equal"
+        else:
+            status, note = "args", "arguments differ, so the step is wrong"
+        dim = stopped
+        if stopped:
+            note = "not scored: stopped earlier"
+        if status in ("tool", "args", "missing") and not stopped:
+            stopped = True
+            note += "; scoring stops"
+        rows.append(_row_html(str(i + 1), _card_html(g, p, "expert", status), _STATUS[status],
+                              _card_html(p, g, "agent", status), note, dim))
+    value = earth_bench.parameter_accuracy(act_calls, exp_calls)
+    eb = _panel_html("Earth-Bench: position by position", "Call i is compared with step i. Tool name and arguments must both be equal; the first failure stops scoring.",
+                     _tile_html("ParamAcc", "Parameter accuracy", value), rows)
+
+    # EO-Gym: align by tool name, normalise, compare arguments and observation.
+    result = eo_gym.tool_metrics(expected, actual)
+    matches = result["step_matches"]
+    used = {m["actual_index"] for m in matches if m["actual_index"] is not None}
+    rows, previous = [], -1
+    for i, (step, m) in enumerate(zip(expected, matches)):
+        idx = m["actual_index"]
+        if idx is not None:
+            for skipped in range(previous + 1, idx):
+                if skipped not in used:
+                    rows.append(_row_html("", _card_html(None, None, "expert", "extra"), _STATUS["extra"], _card_html(as_call(actual[skipped]), None, "agent", "extra"),
+                                          "skipped, not punished"))
+            previous = idx
+        if idx is None:
+            rows.append(_row_html(str(i + 1), _card_html(as_call(step), None, "expert", "missing"), _STATUS["missing"],
+                                  _card_html(None, None, "agent", "missing"), "no call with this tool: scores 0, arguments not compared"))
+            continue
+        ok = m["args_match"] and m["output_match"]
+        status = "match" if ok else "args"
+        raw_equal = as_call(actual[idx])["input"] == step.arguments
+        if ok:
+            note = f"call #{idx + 1}: arguments and output match" + ("" if raw_equal else " after normalising")
+        else:
+            note = f"call #{idx + 1}: arguments {'match' if m['args_match'] else 'differ'}, output {'matches' if m['output_match'] else 'differs'}"
+        rows.append(_row_html(str(i + 1), _card_html(as_call(step), as_call(actual[idx]), "expert", status), _STATUS[status],
+                              _card_html(as_call(actual[idx]), as_call(step), "agent", status), note))
+    for tail in range(previous + 1, len(actual)):
+        if tail not in used:
+            rows.append(_row_html("", _card_html(None, None, "expert", "extra"), _STATUS["extra"], _card_html(as_call(actual[tail]), None, "agent", "extra"),
+                                  "skipped, not punished"))
+    eo = _panel_html("EO-Gym: align by tool name", "Each expert step takes the first later call with the same tool. Arguments are normalised, then arguments and output must both match.",
+                     _tile_html("parameters_score", "Parameters score", result["parameters_score"]), rows)
+    return f"<div style='font-size:13px;line-height:1.45;max-width:1100px'>{eb}{eo}</div>"
+
+
 def compare_widget(runs: dict[str, list[dict[str, Any]]], gold: list[dict[str, Any]]) -> Any:
     """A dropdown of runs; picking one shows its trace next to the expert's (``compare_html``).
 

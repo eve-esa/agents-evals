@@ -175,3 +175,24 @@ def test_compare_html_marks_each_step_and_reports_the_scores():
     assert page.count("justify-content:center'>") == 4
     assert "0.33" in page and "agent vs 3 expert" in page
     assert "(expert: 310.0)" in page
+
+
+def test_rules_html_scores_one_run_under_both_parameter_rules():
+    from agentic_evals.tasks.eo_gym import metrics as eo_gym
+    from workshop import rules_html
+
+    expected = [
+        eo_gym.Step("get_filelist", {"dir_path": "d"}, "ok"),
+        eo_gym.Step("lst", {"path": "A.tif"}, "saved"),
+        eo_gym.Step("ratio", {"threshold": 310.0}, "49.7"),
+    ]
+    actual = [
+        eo_gym.Step("get_filelist", {"dir_path": "d"}, "ok"),
+        eo_gym.Step("band_ratio", {"x": 1}, "0.3"),
+        eo_gym.Step("lst", {"path": "a.tif"}, "saved"),
+        eo_gym.Step("ratio", {"threshold": 310.0}, "49.7"),
+    ]
+    page = rules_html(expected, actual)
+    assert "0.33" in page and "1.00" in page             # Earth-Bench ParamAcc, EO-Gym parameters score
+    assert "scoring stops" in page and "not scored: stopped earlier" in page
+    assert "skipped, not punished" in page and "after normalising" in page

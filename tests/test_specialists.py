@@ -569,6 +569,19 @@ def test_orchestrator_tools_leave_the_specialists():
     assert orchestrator_prompt(("get_filelist",)).endswith("Your own tools, besides the ask_ tools: get_filelist.")
 
 
+def test_shared_tools_reach_every_specialist_once():
+    from agentic_evals.agents.specialists.clustering import Specialist
+    from agentic_evals.agents.specialists.graph import with_shared_tools
+
+    specs = [
+        Specialist(slug="a", name="A Agent", description="d", tools=("x",), skills=(), role_prompt="r"),
+        Specialist(slug="b", name="B Agent", description="d", tools=("get_filelist", "y"), skills=(), role_prompt="r"),
+    ]
+    shared = with_shared_tools(specs, ("get_filelist",))
+    assert [s.tools for s in shared] == [("x", "get_filelist"), ("get_filelist", "y")]
+    assert [s.skills for s in shared] == [(), ()]
+
+
 def _peer_message(content: str, artifact: dict):
     from langchain_core.messages import ToolMessage
 
