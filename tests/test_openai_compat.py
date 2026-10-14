@@ -46,3 +46,30 @@ def test_context_length_error_is_not_retried() -> None:
         assert openai_classify_retry(exc) is None
     else:
         raise AssertionError("expected OpenAIResponseError")
+
+
+def _rate_limit(body: dict) -> "RateLimitError":
+    import httpx
+    from openai import RateLimitError
+
+    request = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
+    return RateLimitError("429", response=httpx.Response(429, request=request), body=body)
+
+
+def test_spent_quota_is_not_retried_but_a_rate_limit_is() -> None:
+    install()
+    from inspect_ai.model._providers import openai_compatible as compatible
+
+    eve = _rate_limit(
+        {
+            "detail": "Token budget exceeded for group 'eve_free'.",
+            "error": {"message": "Token budget exceeded", "type": "insufficient_quota", "code": "token_budget_exceeded"},
+        }
+    )
+    openai_quota = _rate_limit({"message": "You exceeded your current quota", "type": "insufficient_quota", "code": "insufficient_quota"})
+    too_fast = _rate_limit({"error": {"message": "Rate limit reached", "type": "requests", "code": "rate_limit_exceeded"}})
+
+    assert compatible.openai_classify_retry(eve) is None
+    assert compatible.openai_classify_retry(openai_quota) is None
+    decision = compatible.openai_classify_retry(too_fast)
+    assert decision is not None and decision.kind == "rate_limit"

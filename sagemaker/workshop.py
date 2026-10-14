@@ -19,6 +19,7 @@ the table is shared by the room.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,6 +77,8 @@ def check_environment() -> None:
     print("endpoint identified", identity["identified"], identity.get("error") or "")
     if not identity["identified"]:
         raise RuntimeError(f"Model endpoint check failed: {identity.get('error')}")
+    check_budget(model_name)
+    print("token budget available")
 
 
 def download_earth_bench(question_ids: tuple[int, ...] | list[int] = WORKSHOP_QUESTIONS) -> Path:
@@ -107,10 +110,17 @@ def run(
     max_samples: int = 4,
     trajectory_judges: str = "",
 ) -> Any:
-    """Run Earth-Bench Spectrum auto-planning on ``questions`` and return the Inspect log."""
+    """Run Earth-Bench Spectrum auto-planning on ``questions`` and return the Inspect log.
+
+    An EVE model is checked with a one-token request first, so a spent token
+    budget stops here with the endpoint's message instead of inside the eval.
+    """
     from inspect_ai import eval as inspect_eval
 
     from agentic_evals.tasks.earth_bench.task import earth_bench
+
+    if model.startswith("openai-api/eve/"):
+        check_budget(model.removeprefix("openai-api/eve/"))
 
     logs = inspect_eval(
         earth_bench(
@@ -144,7 +154,35 @@ def run(
     )
     if not logs:
         raise RuntimeError("inspect eval returned no log")
-    return logs[0]
+    log = logs[0]
+    message = log.error.message if log.status == "error" and log.error else ""
+    if "token_budget_exceeded" in message or "insufficient_quota" in message:
+        raise BudgetExceeded(f"The model's token budget ran out during this run. {_budget_detail(message)}")
+    return log
+
+
+class BudgetExceeded(RuntimeError):
+    """The endpoint's token budget is spent; retrying will not help until it resets."""
+
+
+def _budget_detail(text: str) -> str:
+    match = re.search(r"Token budget exceeded.*?(?:Resets at [0-9T:.+-]+|$)", text)
+    return match.group(0).strip() if match else text[:300]
+
+
+def check_budget(model_name: str | None = None) -> None:
+    """Send a one-token request to the EVE endpoint; raise ``BudgetExceeded`` if its budget is spent."""
+    import httpx
+
+    name, base_url, api_key = eve_credentials()
+    response = httpx.post(
+        f"{base_url.rstrip('/')}/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"model": model_name or name, "messages": [{"role": "user", "content": "OK"}], "max_tokens": 1},
+        timeout=60,
+    )
+    if response.status_code == 429 and ("token_budget_exceeded" in response.text or "insufficient_quota" in response.text):
+        raise BudgetExceeded(f"The model's token budget is spent. {_budget_detail(response.text)}")
 
 
 def results_df(log: Any) -> Any:

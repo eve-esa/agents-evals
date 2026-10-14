@@ -10,7 +10,9 @@ from agentic_evals.agents.langgraph_react import TERMINATION_KEY, langgraph_agen
 from agentic_evals.agents.trace_callback import TRACE_KEY
 from agentic_evals.tasks.earth_bench.dataset import load_samples
 from agentic_evals.tasks.earth_bench.setup import _parse_questions
-from workshop import WORKSHOP_QUESTIONS, judge, leaderboard, results_df, run
+import pytest
+
+from workshop import WORKSHOP_QUESTIONS, BudgetExceeded, judge, leaderboard, results_df, run
 
 
 def test_workshop_questions_are_ten_spectrum_tasks_with_gold_trajectories():
@@ -70,6 +72,7 @@ def test_run_retries_a_silent_model_attempt(monkeypatch):
         return [SimpleNamespace(status="success", samples=[])]
 
     monkeypatch.setattr("inspect_ai.eval", fake_eval)
+    monkeypatch.setattr("workshop.check_budget", lambda *_a, **_k: None)
     log = run(object(), model="openai-api/eve/x", questions=[11], log_dir="logs/unused")
     assert log.status == "success"
     assert captured["max_tokens"] == 4096
@@ -127,3 +130,31 @@ def test_judge_appends_a_trajectory_judge_without_rerunning(monkeypatch):
     assert judge(log, "openai-api/eve/x") is log
     assert captured["action"] == "append"
     assert len(captured["scorers"]) == 1
+
+
+EVE_QUOTA = (
+    "Error code: 429 - {'detail': \"Token budget exceeded for group 'eve_free'. Limit is 500000 tokens per period. "
+    "Resets at 2026-11-05T08:42:59.676000+00:00.\", 'error': {'type': 'insufficient_quota', 'code': 'token_budget_exceeded'}}"
+)
+
+
+def test_run_stops_with_one_line_when_the_budget_runs_out(monkeypatch):
+    log = SimpleNamespace(status="error", error=SimpleNamespace(message=EVE_QUOTA), samples=[])
+    monkeypatch.setattr("inspect_ai.eval", lambda *_a, **_k: [log])
+    monkeypatch.setattr("workshop.check_budget", lambda *_a, **_k: None)
+    with pytest.raises(BudgetExceeded) as raised:
+        run(object(), model="openai-api/eve/x", questions=[11], log_dir="logs/unused")
+    assert str(raised.value).endswith("Resets at 2026-11-05T08:42:59.676000+00:00.")
+    assert "'eve_free'" in str(raised.value)
+
+
+def test_check_budget_raises_on_a_spent_quota(monkeypatch):
+    import workshop
+
+    response = SimpleNamespace(status_code=429, text=EVE_QUOTA)
+    monkeypatch.setattr("httpx.post", lambda *_a, **_k: response)
+    monkeypatch.setattr(workshop, "eve_credentials", lambda: ("m", "https://example.invalid/v1", "k"))
+    with pytest.raises(BudgetExceeded):
+        workshop.check_budget()
+    monkeypatch.setattr("httpx.post", lambda *_a, **_k: SimpleNamespace(status_code=200, text="{}"))
+    workshop.check_budget()
