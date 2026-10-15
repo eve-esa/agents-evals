@@ -262,7 +262,7 @@ def inspect_task():
                  f"INSPECT TASK: ONE EVALUATION</text>")
     steps = [
         ("Dataset", BLUE, ["questions, gold answers", "and gold tool calls"]),
-        ("Setup", GREY, ["starts the sample's", "MCP tool servers", "records the endpoint"]),
+        ("Setup", GREY, ["before the agent runs:", "starts the MCP tool", "servers, records the", "model endpoint"]),
         ("Solver", PURPLE, ["your agent: a LangGraph", "graph run through", "agent_bridge()"]),
         ("Scorers", GREEN, ["the benchmark's own", "metrics, plus optional", "LLM judges"]),
     ]
