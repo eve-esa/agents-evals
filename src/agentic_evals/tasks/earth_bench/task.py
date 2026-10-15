@@ -26,7 +26,7 @@ from inspect_ai.model import GenerateConfig
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
 from agentic_evals.agents.langgraph_react import langgraph_react
-from agentic_evals.paths import REPO_ROOT
+from agentic_evals.paths import UPSTREAM_LOCK
 from agentic_evals.run_identity import record_run_identity
 from agentic_evals.scorers.judges import extra_judges
 from agentic_evals.tasks.earth_bench.dataset import (
@@ -65,7 +65,7 @@ def skip_unavailable_rgb() -> Solver:
 
 
 def _upstream_revisions() -> dict[str, str]:
-    lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+    lock = tomllib.loads(UPSTREAM_LOCK.read_text())
     return {
         "earth_agent_rev": lock["earth_agent"]["rev"],
         "earth_bench_data_rev": lock["earth_bench_data"]["revision"],

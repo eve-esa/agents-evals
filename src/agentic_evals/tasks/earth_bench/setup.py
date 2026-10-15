@@ -10,7 +10,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from agentic_evals.paths import EARTH_BENCH_DATA, REPO_ROOT
+from agentic_evals.paths import EARTH_BENCH_DATA, UPSTREAM_LOCK
 
 MODALITY_QUESTIONS = {
     "spectrum": range(1, 101),
@@ -52,7 +52,7 @@ def install(args) -> None:
         return
     from huggingface_hub import snapshot_download
 
-    lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+    lock = tomllib.loads(UPSTREAM_LOCK.read_text())
     spec = lock["earth_bench_data"]
     target = EARTH_BENCH_DATA / "benchmark" / "data"
     target.mkdir(parents=True, exist_ok=True)

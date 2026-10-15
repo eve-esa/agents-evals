@@ -31,7 +31,7 @@ from inspect_ai.model import GenerateConfig
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
 from agentic_evals.agents.langgraph_react import langgraph_react
-from agentic_evals.paths import REPO_ROOT
+from agentic_evals.paths import UPSTREAM_LOCK
 from agentic_evals.run_identity import record_run_identity
 from agentic_evals.tasks.eo_gym.dataset import PromptVariant, Toolset, eo_gym_dataset
 from agentic_evals.scorers.judges import extra_judges
@@ -94,7 +94,7 @@ def eo_gym(
             "EO-Gym's released tools only implement the Verified mode (OPTICAL_BBOX_BACKEND is hard-coded "
             "to 'ground_truth'); an Unverified run would silently be Verified."
         )
-    lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+    lock = tomllib.loads(UPSTREAM_LOCK.read_text())
     if vision:
         setup = [record_run_identity(), require_tool_server(execute_url), publish_mcp_servers(sample_servers_factory(execute_url))]
         # The middleware stops after max_calls model turns. The recursion limit

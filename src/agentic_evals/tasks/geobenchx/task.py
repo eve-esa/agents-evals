@@ -55,7 +55,7 @@ from inspect_ai.model import GenerateConfig
 from inspect_ai.solver import Solver
 
 from agentic_evals.agents.langgraph_react import langgraph_react
-from agentic_evals.paths import REPO_ROOT
+from agentic_evals.paths import UPSTREAM_LOCK
 from agentic_evals.run_identity import record_run_identity
 from agentic_evals.scorers.judges import extra_judges
 from agentic_evals.tasks.geobenchx.dataset import Group, Kind, geobenchx_dataset
@@ -76,7 +76,7 @@ RECURSION_LIMIT = 25
 
 
 def _revision() -> str:
-    lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+    lock = tomllib.loads(UPSTREAM_LOCK.read_text())
     return lock["geobenchx"]["rev"]
 
 

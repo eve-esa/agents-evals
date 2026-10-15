@@ -14,7 +14,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-from agentic_evals.paths import EO_GYM_ROOT, EO_GYM_SERVER, EO_GYM_VENV, REPO_ROOT, venv_python
+from agentic_evals.paths import EO_GYM_ROOT, EO_GYM_SERVER, EO_GYM_VENV, UPSTREAM_LOCK, venv_python
 
 
 def unpack_archives(root: Path = EO_GYM_ROOT) -> None:
@@ -57,7 +57,7 @@ def install(args) -> None:
         return
     from huggingface_hub import snapshot_download
 
-    lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+    lock = tomllib.loads(UPSTREAM_LOCK.read_text())
     spec = lock["eo_gym"]
     EO_GYM_ROOT.mkdir(parents=True, exist_ok=True)
     print("Downloading EO-Gym image archives and lookup tables.", flush=True)

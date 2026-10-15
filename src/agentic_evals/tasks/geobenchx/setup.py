@@ -14,7 +14,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-from agentic_evals.paths import GEOBENCHX_DATA, REPO_ROOT
+from agentic_evals.paths import GEOBENCHX_DATA, UPSTREAM_LOCK
 
 
 def _find_dir(root: Path, name: str) -> Path | None:
@@ -29,7 +29,7 @@ def install(args) -> None:
     if args.skip_data:
         print("GeoBenchX Drive archive skipped (--skip-data). Tool code is already in the package.", flush=True)
         return
-    lock = tomllib.loads((REPO_ROOT / "upstream.lock.toml").read_text())
+    lock = tomllib.loads(UPSTREAM_LOCK.read_text())
     spec = lock["geobenchx"]
     GEOBENCHX_DATA.mkdir(parents=True, exist_ok=True)
     dest = GEOBENCHX_DATA / "geobenchx_data.zip"

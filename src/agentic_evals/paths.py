@@ -13,6 +13,9 @@ import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Upstream revisions the tasks pin. Ships inside the package, so it resolves in a
+# non-editable install too (REPO_ROOT then points into site-packages).
+UPSTREAM_LOCK = Path(__file__).resolve().parent / "upstream.lock.toml"
 
 
 def _env_path(var: str, default: Path) -> Path:
