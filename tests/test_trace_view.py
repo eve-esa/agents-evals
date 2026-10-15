@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-pytest.importorskip("IPython", reason="the workshop trace view needs IPython (sagemaker/.venv)")
+pytest.importorskip("IPython", reason="the workshop trace view needs IPython (evaluating-eo-agents-bifold/.venv)")
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sagemaker"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluating-eo-agents-bifold"))
 
 from trace_view import trace_from_sample, visualize_agent_trace  # noqa: E402
 

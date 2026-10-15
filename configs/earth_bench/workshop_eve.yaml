@@ -1,5 +1,5 @@
 # Earth-Bench workshop baseline: the ten Spectrum auto-planning questions of
-# sagemaker/workshop.py (WORKSHOP_QUESTIONS), EVE through its OpenAI-compatible
+# evaluating-eo-agents-bifold/workshop.py (WORKSHOP_QUESTIONS), EVE through its OpenAI-compatible
 # endpoint, the default LangGraph ReAct solver.
 #
 # This is the same run the hands-on notebook makes with workshop.run(), written

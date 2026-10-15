@@ -1,5 +1,0 @@
-# Install from the sagemaker folder so ".." is the agentic-evals repo.
--e ..[earth-bench]
-jupyter>=1.1
-ipykernel>=6.29
-python-dotenv>=1.0

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sagemaker"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluating-eo-agents-bifold"))
 
 from agentic_evals.agents.langgraph_react import TERMINATION_KEY, langgraph_agent, react_graph
 from agentic_evals.agents.trace_callback import TRACE_KEY

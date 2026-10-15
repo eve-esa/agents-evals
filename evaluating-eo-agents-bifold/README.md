@@ -1,4 +1,4 @@
-# SageMaker hands-on
+# Evaluating EO agents, BIFOLD hands-on
 
 Closed environment for `eval_agents_handson.ipynb`. It has its own virtualenv and its own `.env`. It does not use the repository `.venv`.
 
@@ -14,7 +14,9 @@ From this folder, on the SageMaker notebook instance:
 bash setup.sh
 ```
 
-`setup.sh` creates `.venv`, installs this repo with the Earth-Bench extra, registers the Jupyter kernel `agentic-evals workshop`, and copies `.env.example` to `.env` when `.env` is missing.
+`setup.sh` creates `.venv` with uv, installs the notebook's requirements, registers the Jupyter kernel `agentic-evals workshop`, runs `install_library.sh`, and copies `.env.example` to `.env` when `.env` is missing.
+
+`install_library.sh` installs `agentic-evals` with the Earth-Bench extra into `.venv`. Inside an agentic-evals checkout it installs that checkout in editable mode. Otherwise it installs from `https://github.com/eve-esa/agents-evals.git` at the ref in `AGENTS_EVALS_REF` (default `feat/workshop-notebook`). The repository is private, so set `GITHUB_TOKEN` in `.env` or in the shell first. The notebook has an install cell that runs the same script in the kernel.
 
 Fill in `.env`:
 
