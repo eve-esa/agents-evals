@@ -6,6 +6,7 @@ colours, rounded cards with a coloured left bar, monospace tool names, and muted
 The Pass@k tree uses illustrative edge probabilities. Its expected Pass@k = 1 - (1 - p)^k is the expectation of the
 unbiased estimator 1 - C(n-c, k) / C(n, k) (Chen et al. 2021, arXiv:2107.03374, Sec. 2.1 Eq. 1 and Appendix A),
 which also scores the drawn attempts.
+The Inspect task diagram (SVG) shows the harness around one evaluation.
 The run anatomy is the real trace of Earth-Bench question 11 from an EVE run.
 """
 
@@ -221,8 +222,79 @@ def trajectory_q11():
     plt.close(fig)
 
 
+def inspect_task():
+    """The harness around one Inspect task: run configuration, dataset -> setup -> solver -> scorers, and the logs.
+
+    Written as SVG with fixed colours on white, so it reads the same in light and dark notebook themes.
+    """
+    def arrow(x1, y1, x2, y2):
+        return (f"<line x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}' stroke='{MUTED}' stroke-width='1.5' "
+                f"marker-end='url(#arrow)'/>")
+
+    def card(x, y, w, h, colour, title, lines):
+        out = (f"<rect x='{x}' y='{y}' width='{w}' height='{h}' rx='8' fill='{colour}' fill-opacity='.12' "
+               f"stroke='{colour}' stroke-width='1.5'/>"
+               f"<text x='{x + 12}' y='{y + 26}' font-size='15' font-weight='700' fill='{INK}'>{title}</text>")
+        for i, text in enumerate(lines):
+            out += f"<text x='{x + 12}' y='{y + 48 + 17 * i}' font-size='11.5' fill='{INK}'>{text}</text>"
+        return out
+
+    parts = [f"<rect x='0' y='0' width='840' height='456' fill='white'/>"]
+
+    # The harness frame: everything below is agentic_evals, built on Inspect AI.
+    parts.append(f"<rect x='10' y='10' width='820' height='436' rx='14' fill='none' stroke='{INK}' stroke-width='1.6'/>")
+    parts.append(f"<text x='28' y='38' font-size='16' font-weight='700' fill='{INK}'>agentic_evals: our evaluation "
+                 f"harness, built on Inspect AI</text>")
+    parts.append(f"<text x='28' y='58' font-size='11.5' fill='{MUTED}'>One evaluation is one Inspect task; "
+                 f"the harness supplies the benchmarks, MCP tools, solvers, scorers and configs.</text>")
+
+    # 1. The run configuration sits above the task.
+    parts.append(f"<rect x='20' y='72' width='800' height='40' rx='8' fill='{GREY}' fill-opacity='.12' "
+                 f"stroke='{GREY}' stroke-width='1.5'/>")
+    parts.append(f"<text x='420' y='97' font-size='12.5' text-anchor='middle' fill='{INK}'>Run configuration (YAML): "
+                 f"model and endpoint, task arguments, samples, epochs, generation settings</text>")
+    parts.append(arrow(420, 112, 420, 130))
+
+    # 2. One Inspect task: dataset -> setup -> solver -> scorers.
+    parts.append(f"<rect x='20' y='130' width='800' height='180' rx='14' fill='none' stroke='{MUTED}' "
+                 f"stroke-opacity='.6' stroke-dasharray='6 4'/>")
+    parts.append(f"<text x='34' y='150' font-size='11.5' font-weight='700' letter-spacing='.6' fill='{MUTED}'>"
+                 f"INSPECT TASK: ONE EVALUATION</text>")
+    steps = [
+        ("Dataset", BLUE, ["questions, gold answers", "and gold tool calls"]),
+        ("Setup", GREY, ["starts the sample's", "MCP tool servers", "records the endpoint"]),
+        ("Solver", PURPLE, ["your agent: a LangGraph", "graph run through", "agent_bridge()"]),
+        ("Scorers", GREEN, ["the benchmark's own", "metrics, plus optional", "LLM judges"]),
+    ]
+    for k, (title, colour, lines) in enumerate(steps):
+        x = 36 + 196 * k
+        parts.append(card(x, 164, 176, 120, colour, title, lines))
+        if k < len(steps) - 1:
+            parts.append(arrow(x + 178, 224, x + 194, 224))
+    parts.append(f"<text x='34' y='302' font-size='11.5' fill='{MUTED}'>"
+                 f"Solver and scorers run once per sample. An epoch repeats the whole task.</text>")
+
+    # 3. The log: three places the run can go.
+    logs = [
+        ("Inspect .eval log", AMBER, ["messages, tool calls, scores", "always written; rescored offline"]),
+        ("Weights &amp; Biases", BLUE, ["inspect-wandb: runs, tables", "Weave traces of agent calls"]),
+        ("Langfuse", PURPLE, ["one trace per sample, agent calls", "scores attached to each trace"]),
+    ]
+    for k, (title, colour, lines) in enumerate(logs):
+        x = 20 + 272 * k
+        parts.append(arrow(x + 128, 312, x + 128, 348))
+        parts.append(card(x, 352, 256, 72, colour, title, lines))
+
+    marker = (f"<defs><marker id='arrow' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' "
+              f"orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='{MUTED}'/></marker></defs>")
+    svg = (f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 840 456' width='840' height='456' "
+           f"font-family='system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'>{marker}{''.join(parts)}</svg>\n")
+    (OUT / "inspect_task.svg").write_text(svg, encoding="utf-8")
+
+
 if __name__ == "__main__":
     pass_at_k_tree()
+    inspect_task()
     run_anatomy()
     trajectory_q11()
     print("wrote figures in", OUT)
