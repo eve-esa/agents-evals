@@ -14,9 +14,9 @@ From this folder, on the SageMaker notebook instance:
 bash setup.sh
 ```
 
-`setup.sh` creates `.venv` with uv, installs the notebook's requirements, registers the Jupyter kernel `agentic-evals workshop`, runs `install_library.sh`, and copies `.env.example` to `.env` when `.env` is missing.
+`setup.sh` creates `.venv` with uv, installs `requirements.txt` (which includes `agentic-evals` with its Earth-Bench extra, from GitHub), registers the Jupyter kernel `agentic-evals workshop`, and copies `.env.example` to `.env` when `.env` is missing.
 
-`install_library.sh` installs `agentic-evals` with the Earth-Bench extra into `.venv`. Inside an agentic-evals checkout it installs that checkout in editable mode. Otherwise it installs from `https://github.com/eve-esa/agents-evals.git` at the ref in `AGENTS_EVALS_REF` (default `feat/workshop-notebook`). The notebook has an install cell that runs the same script in the kernel.
+The library is pinned in `requirements.txt` to the `feat/workshop-notebook` branch of `https://github.com/eve-esa/agents-evals`. The notebook's install cell is commented out, because the lab already provides the environment.
 
 Fill in `.env`:
 

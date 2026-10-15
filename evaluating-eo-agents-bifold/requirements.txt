@@ -1,6 +1,6 @@
-# Notebook and kernel packages. setup.sh installs these first, then runs install_library.sh,
-# which installs agentic-evals with its Earth-Bench extra (pandas, inspect-ai, langchain, ...).
-# The library is not listed here: it comes from a checkout next to this folder, or from GitHub.
+# Packages for the workshop kernel. setup.sh installs this file with uv.
+# agents-evals is public. The branch is the one this workshop was built on; pin a commit SHA once it is merged.
+agentic-evals[earth-bench] @ git+https://github.com/eve-esa/agents-evals.git@feat/workshop-notebook
 jupyter>=1.1
 jupyterlab>=4.4
 ipykernel>=6.29
