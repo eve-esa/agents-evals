@@ -738,21 +738,35 @@ def dashboard_aliases(
     return out
 
 
-def model_run_name(model: str | None, benchmark: str | None = None) -> str:
-    """Display name: the checkpoint, then the benchmark.
+def solver_name(plan: Any) -> str | None:
+    """The agent solver's leaf name, from the last step of the eval plan.
+
+    ``agentic_evals/langgraph_specialists`` is ``langgraph_specialists``. The
+    agent is the last step; the steps before it are the run's helpers.
+    """
+    steps = getattr(plan, "steps", None) or []
+    if not steps:
+        return None
+    leaf = str(getattr(steps[-1], "solver", "") or "").rstrip("/").split("/")[-1].strip()
+    return leaf or None
+
+
+def model_run_name(model: str | None, benchmark: str | None = None, solver: str | None = None) -> str:
+    """Display name: the checkpoint, then the benchmark, then the solver.
 
     ``openai-api/openrouter/qwen/qwen3.8-27b`` on GeoBenchX is
     ``qwen3.8-27b_geobenchx``. The checkpoint stays a single token so a
-    workspace search on the model still matches. inspect-wandb calls
-    ``wandb.init(name=None)`` for a single eval, and wandb then keeps a
-    generated id as the display name
+    workspace search on the model still matches. The solver goes last, so a
+    run's architecture is visible in the name, e.g. ``..._langgraph_specialists``.
+    inspect-wandb calls ``wandb.init(name=None)`` for a single eval, and wandb then
+    keeps a generated id as the display name
     (https://docs.wandb.ai/ref/python/init, ``name``).
     """
-    leaf = (model or "model").rstrip("/").split("/")[-1].strip() or "model"
-    label = (benchmark or "").strip()
-    if not label:
-        return leaf
-    return f"{leaf}_{label}"
+    parts = [(model or "model").rstrip("/").split("/")[-1].strip() or "model"]
+    for label in ((benchmark or "").strip(), (solver or "").strip()):
+        if label:
+            parts.append(label)
+    return "_".join(parts)
 
 
 def results_rows(scores: list[Any], benchmark: str) -> list[dict[str, Any]]:
@@ -1556,7 +1570,7 @@ def publish(run: Any, log: Any, samples: Any = None) -> None:
         groups=[str(field) for field in groups],
         only=published_names(metadata),
     )
-    run.name = model_run_name(getattr(spec, "model", None), benchmark)
+    run.name = model_run_name(getattr(spec, "model", None), benchmark, solver_name(getattr(log, "plan", None)))
     label = regime_label(regime)
     modality = metadata.get("modality")
     try:
@@ -1620,6 +1634,7 @@ class WandbCompare(Hooks):
             benchmark_name(
                 getattr(spec, "metadata", None), getattr(spec, "task", None)
             ),
+            solver_name(getattr(data, "plan", None)),
         )
 
     async def on_sample_end(self, data: SampleEnd) -> None:

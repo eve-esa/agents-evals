@@ -34,6 +34,7 @@ The split used is stored under ``SPECIALISTS_KEY``.
 
 from __future__ import annotations
 
+import asyncio
 import contextvars
 from contextlib import AsyncExitStack
 from dataclasses import asdict, replace
@@ -66,6 +67,7 @@ from agentic_evals.agents.specialists.a2a import (
 )
 from agentic_evals.agents.specialists.clustering import Specialist, plan_specialists
 from agentic_evals.agents.trace_callback import RAW_TRACE_KEY, SUBAGENT_TRACES_KEY, TraceRecorder
+from agentic_evals.agents.langfuse_trace import flush_langfuse, langfuse_handler
 from agentic_evals.agents.weave_trace import weave_recorder
 
 SPECIALISTS_KEY = "agentic_evals:specialists"
@@ -138,6 +140,11 @@ def without_tools(specialists: list[Specialist], held: tuple[str, ...]) -> list[
     return kept
 
 
+def with_shared_tools(specialists: list[Specialist], shared: tuple[str, ...]) -> list[Specialist]:
+    """The specialists, each also given the ``shared`` tools it does not already have."""
+    return [replace(spec, tools=(*spec.tools, *(t for t in shared if t not in spec.tools))) for spec in specialists]
+
+
 def own_bridge(run: RunSubAgent) -> RunSubAgent:
     """``run`` with its own ``agent_bridge()`` per request, apart from the orchestrator's.
 
@@ -208,7 +215,9 @@ def langgraph_specialists(
     sub_recursion_limit: int = 30,
     max_model_calls: int | None = None,
     orchestrator_tools: tuple[str, ...] = ("get_filelist",),
+    shared_tools: tuple[str, ...] = (),
     name: str = "orchestrator",
+    time_limit_s: float | None = 300.0,
 ) -> Agent:
     """Orchestrator plus one A2A specialist per cluster of the task's tools.
 
@@ -227,7 +236,14 @@ def langgraph_specialists(
         max_model_calls: Orchestrator model-turn cap, as for ``langgraph_react``.
         orchestrator_tools: Task tools the orchestrator runs itself, not a
             specialist. They are taken out of the specialists' sets.
+        shared_tools: Task tools every specialist also gets, on top of its cluster.
+            Empty by default, so runs that do not ask for it are unchanged. Each
+            name must be a tool of the task. The orchestrator keeps its own
+            copies (``orchestrator_tools``).
         name: Orchestrator name.
+        time_limit_s: Wall-clock limit on the orchestrator's run, specialists included,
+            in seconds (``None`` for no limit). When it runs out, the run stops with
+            termination ``time_limit``; the calls made so far are still stored.
     """
 
     async def execute(state: AgentState) -> AgentState:
@@ -235,16 +251,16 @@ def langgraph_specialists(
         entries: list[dict[str, Any]] = []
         recorder = TraceRecorder(agent_name=name, entries=entries)
         raw = TraceRecorder(agent_name=name, roles=None)
-        weave = [r for r in (weave_recorder(),) if r is not None]
+        weave = [r for r in (weave_recorder(), langfuse_handler()) if r is not None]
         async with agent_bridge(state) as bridge:
             async with AsyncExitStack() as stack:
                 tools = await load_task_mcp_tools(stack)
                 by_name = {t.name: t for t in tools}
-                missing = set(orchestrator_tools) - by_name.keys()
+                missing = (set(orchestrator_tools) | set(shared_tools)) - by_name.keys()
                 if missing:
-                    raise ValueError(f"orchestrator_tools not in the task's tools: {sorted(missing)}")
+                    raise ValueError(f"orchestrator_tools or shared_tools not in the task's tools: {sorted(missing)}")
                 plan = await plan_specialists(tools, clusters, recompute)
-                specialists = without_tools(plan, orchestrator_tools)
+                specialists = with_shared_tools(without_tools(plan, orchestrator_tools), shared_tools)
                 store().set(SPECIALISTS_KEY, [asdict(s) for s in specialists])
 
                 question = _question(state) if share_question else None
@@ -278,20 +294,25 @@ def langgraph_specialists(
                     middleware=default_middleware(max_model_calls),
                     name=name,
                 )
-                termination = await run_graph(
-                    orchestrator,
-                    bridge,
-                    state,
-                    recorder,
-                    recursion_limit,
-                    system_text=orchestrator_prompt(orchestrator_tools),
-                    callbacks=[recorder, raw, *weave],
-                )
+                try:
+                    async with asyncio.timeout(time_limit_s):
+                        termination = await run_graph(
+                            orchestrator,
+                            bridge,
+                            state,
+                            recorder,
+                            recursion_limit,
+                            system_text=orchestrator_prompt(orchestrator_tools),
+                            callbacks=[recorder, raw, *weave],
+                        )
+                except TimeoutError:
+                    termination = "time_limit"
                 subagents = await subagent_traces(specialists, graphs, prompts, raw.entries, entries)
             recorder.save()
             raw.save(RAW_TRACE_KEY)
             store().set(SUBAGENT_TRACES_KEY, subagents)
             store().set(TERMINATION_KEY, termination)
+            flush_langfuse()
             return bridge.state
 
     return execute
