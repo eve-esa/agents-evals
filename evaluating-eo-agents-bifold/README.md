@@ -1,10 +1,10 @@
 # Evaluating EO agents, BIFOLD hands-on
 
-Closed environment for `eval_agents_handson.ipynb`. It has its own virtualenv and its own `.env`. It does not use the repository `.venv`.
+Closed environment for `eval_agents_handson.ipynb`. It has its own virtualenv and its own `.env`. It does not share the agentic-evals checkout's `.venv`.
 
 The notebook surveys EO-agent benchmarks, compares answer-only and trajectory metrics across Earth-Bench, GeoBenchX and EO-Gym, and walks through how the harness runs an eval. The hands-on part scores Earth-Bench with the package metrics (Feng et al., ICLR 2026, [arXiv:2509.23141](https://arxiv.org/abs/2509.23141), Appendix B.2). The ReAct graph is written in the notebook and passed to `langgraph_agent`. The ten Spectrum questions are `WORKSHOP_QUESTIONS` in `workshop.py`. `judge()` rescores a saved log with the trajectory judge, and `leaderboard()` builds one row per finished run in a log directory.
 
-The same baseline as a run config: `configs/earth_bench/workshop_eve.yaml`.
+The same baseline as a run config: `configs/earth_bench/workshop_eve.yaml` in the agentic-evals repository.
 
 ## Setup
 
