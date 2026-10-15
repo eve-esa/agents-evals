@@ -5,7 +5,6 @@
 # PYTHON           interpreter to install into (default: this folder's .venv)
 # AGENTS_EVALS_REF git ref to install from GitHub (default: feat/workshop-notebook)
 # AGENTS_EVALS_URL repository URL (default: https://github.com/eve-esa/agents-evals.git)
-# GITHUB_TOKEN     token for the private repository (GH_TOKEN also works); unused in a checkout
 #
 # When this folder sits inside an agentic-evals checkout, that checkout is installed in editable mode.
 # Otherwise the library is installed from GitHub at AGENTS_EVALS_REF.
@@ -26,14 +25,6 @@ if [[ -f ../pyproject.toml ]] && grep -q '^name = "agentic-evals"' ../pyproject.
   echo "Installing agentic-evals from the checkout at $(cd .. && pwd), editable."
   SPEC_ARGS=(-e "..[earth-bench]")
 else
-  TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
-  if [[ -n "$TOKEN" ]]; then
-    # The token goes in a git HTTP header through the environment, so it never appears in the process arguments.
-    AUTH="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
-    export GIT_CONFIG_COUNT=1
-    export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
-    export GIT_CONFIG_VALUE_0="Authorization: basic ${AUTH}"
-  fi
   echo "Installing agentic-evals from ${REPO_URL} at ${REF}."
   SPEC_ARGS=("agentic-evals[earth-bench] @ git+${REPO_URL}@${REF}")
 fi
