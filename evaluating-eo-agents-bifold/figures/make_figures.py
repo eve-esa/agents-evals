@@ -3,10 +3,13 @@
 The styling matches the trace viewer in ``workshop.py`` (``compare_html``): the same status
 colours, rounded cards with a coloured left bar, monospace tool names, and muted labels.
 
-The Pass@k tree uses illustrative edge probabilities; Pass@k = 1 - (1 - p)^k.
+The Pass@k tree uses illustrative edge probabilities. Its expected Pass@k = 1 - (1 - p)^k is the expectation of the
+unbiased estimator 1 - C(n-c, k) / C(n, k) (Chen et al. 2021, arXiv:2107.03374, Sec. 2.1 Eq. 1 and Appendix A),
+which also scores the drawn attempts.
 The run anatomy is the real trace of Earth-Bench question 11 from an EVE run.
 """
 
+from math import comb
 from pathlib import Path
 
 import matplotlib
@@ -133,8 +136,11 @@ def pass_at_k_tree():
             f"p that one attempt is correct: p = {p_ok:.2f}.", fontsize=9.2, color=INK)
     ax.text(0.0, -1.45, f"Expected Pass@1 = {ps[0]:.2f}     Pass@2 = {ps[1]:.2f}     Pass@3 = {ps[2]:.2f}",
             fontsize=10.5, fontweight="bold", color=GREEN)
-    ax.text(0.0, -1.85, "This draw: attempt 1 gives up (wrong), attempts 2 and 3 are correct, so this task scores "
-            "Pass@1 = 0, Pass@2 = 1, Pass@3 = 1.", fontsize=9.2, color=MUTED)
+    # The drawn attempts scored with the unbiased estimator (Chen et al. 2021, Eq. 1): n = 3 attempts, c = 2 correct.
+    n, c = 3, 2
+    est = [1 - comb(n - c, k) / comb(n, k) for k in (1, 2, 3)]
+    ax.text(0.0, -1.85, f"This draw: attempt 1 gives up (wrong), attempts 2 and 3 are correct, so n = {n}, c = {c} and the "
+            f"estimator gives Pass@1 = {est[0]:.2f}, Pass@2 = {est[1]:.0f}, Pass@3 = {est[2]:.0f}.", fontsize=9.2, color=MUTED)
     fig.savefig(OUT / "pass_at_k_tree.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
 
