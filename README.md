@@ -2,123 +2,52 @@
 
 Evaluation harness for Earth Observation agents, built for the EVE project (Pi School and ESA Φ-lab).
 
-It runs EVE and baseline agents on public EO agent benchmarks under the same conditions, and records both the final answer and the tool-call trajectory. The harness is [Inspect AI](https://inspect.aisi.org.uk/). Agents are LangGraph graphs. Tools are reached over MCP.
-
-Python 3.12 or newer. Dependencies are managed with [uv](https://docs.astral.sh/uv/). Results are Inspect `.eval` logs under `logs/`.
+It runs agents on public EO agent benchmarks under the same conditions, records the final answer and the tool-call trajectory, and scores each run with that benchmark's own published metrics. The harness is [Inspect AI](https://inspect.aisi.org.uk/). Agents are LangGraph graphs, and tools are reached over MCP.
 
 ## Benchmarks
 
-| Benchmark | Task name | Code and tasks | Libraries | Bulk data |
-| --- | --- | --- | --- | --- |
-| Earth-Bench | `agentic_evals/earth_bench` | In `src/agentic_evals/tasks/earth_bench/` | `uv sync --extra earth-bench` | Rasters, up to 16.6 GB, in `data/earth_bench` |
-| GeoBenchX | `agentic_evals/geobenchx` | In `src/agentic_evals/tasks/geobenchx/` | `uv sync --extra geobenchx` | Google Drive archive in `data/geobenchx` |
-| EO-Gym | `agentic_evals/eo_gym` | In `src/agentic_evals/tasks/eo_gym/` | Its own virtualenv, installed by setup | About 47 GB, plus a tool server you start yourself |
+| Benchmark | Task name | Metrics | Install |
+| --- | --- | --- | --- |
+| Earth-Bench ([Feng et al., ICLR 2026](https://arxiv.org/abs/2509.23141)) | `agentic_evals/earth_bench` | Accuracy; TAO, TIO, TEM, parameter accuracy, efficiency | `uv sync --extra earth-bench` |
+| GeoBenchX ([Krechetova & Kochedykov, SIGSPATIAL 2025](https://arxiv.org/abs/2503.18129)) | `agentic_evals/geobenchx` | LLM-judge match / partial / no match; length difference | `uv sync --extra geobenchx` |
+| EO-Gym ([Ma et al., 2026](https://arxiv.org/abs/2605.01250)) | `agentic_evals/eo_gym` | Pass@k with an LLM judge; tool metrics; parameters score | its own virtualenv, created by setup |
 
-Earth-Bench and GeoBenchX were ported from pinned upstream revisions. The changes, and the MIT notices, are in each task's `PORTING.md`. Scores from those tools are for this port and the library versions in the extra, not for the original dependency pins.
-
-EO-Gym's tool server is copied into `tasks/eo_gym/server`. It imports torch, so setup installs it in its own virtualenv.
-
-`uv sync` alone installs the harness. It does not install Earth-Bench or GeoBenchX libraries, and it does not download any rasters, imagery, or the Drive archive. Install one benchmark at a time: the two extras pull different stacks (rasterio, geopandas, and so on) into the same environment.
+Where we fix a known problem in an original benchmark, the change and its reason are in [docs/benchmark_changes.md](docs/benchmark_changes.md). Install one benchmark at a time: the extras pull different geospatial stacks into the same environment.
 
 ## Install
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if it is not already on the machine. uv downloads Python 3.12 itself; the system Python can be older.
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-The repository is private. `git clone` asks for a GitHub username and a personal access token unless this machine is already authenticated (`gh auth login`, or a credential helper).
+Python 3.12 or newer, managed with [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/eve-esa/agents-evals.git
 cd agents-evals
 uv sync --extra earth-bench
-cp .env.example .env
-```
-
-Put API keys in `.env`. Inspect reads that file from the working directory. `.env` is gitignored.
-
-| Variable | Used for |
-| --- | --- |
-| `OPENROUTER_API_KEY` | `--model openai-api/openrouter/<provider>/<model>` |
-| `MISTRAL_API_KEY`, `MISTRAL_BASE_URL` | `--model openai-api/mistral/<model>` |
-| `EVE_BASE_URL`, `EVE_API_KEY` | `--model openai-api/eve/<model>` |
-| `WANDB_API_KEY`, `WANDB_ENTITY` | Optional run logging. See [Weights & Biases](#weights--biases). |
-
-For any other OpenAI-compatible host, the provider name in the model id is the env prefix: `openai-api/<name>/<model>` reads `<NAME>_API_KEY` and `<NAME>_BASE_URL`.
-
-### Earth-Bench
-
-```bash
-uv sync --extra earth-bench
+cp .env.example .env        # then add your API keys
 uv run python scripts/setup_benchmark.py earth-bench --modality spectrum
 ```
 
-`--modality` is `spectrum` (questions 1–100), `products` (101–188), `rgb` (189–248), or `all`. With no modality and no `--questions`, the script downloads every task raster (16.6 GB). `--questions 1-5` downloads only those task directories.
+`setup_benchmark.py` downloads each benchmark's bulk data into `data/` (gitignored):
 
-Task text, gold tool calls, and the perception lookup table are already in the package. You need the rasters only when a tool has to open a GeoTIFF.
+- `earth-bench`: task rasters. `--modality` is `spectrum`, `products`, `rgb` or `all` (16.6 GB). `--questions 1-5` fetches only those tasks.
+- `geobenchx`: the dataset archive from Google Drive. One tool, `generate_contours_display`, needs a system GDAL.
+- `eo-gym`: about 47 GB of imagery and the tool server's virtualenv. Start the server from `src/agentic_evals/tasks/eo_gym/server` with `data/venvs/eo-gym/bin/python -m eo_gym.server`.
 
-### GeoBenchX
-
-```bash
-uv sync --extra geobenchx
-uv run python scripts/setup_benchmark.py geobenchx
-```
-
-This downloads the dataset archive linked from the GeoBenchX README (Google Drive) into `data/geobenchx` and records the `StatData` and `Geodata` paths. Task JSON and the 24 tools are already in the package.
-
-`generate_contours_display` is the one tool that still imports GDAL. The other 23 run without it. If you need that tool: `brew install gdal` on macOS, or `apt-get install gdal-bin libgdal-dev` on Debian or Ubuntu.
-
-### EO-Gym
-
-```bash
-uv run python scripts/setup_benchmark.py eo-gym
-```
-
-This downloads the image archives and lookup tables into `data/eo_gym` (about 47 GB) and installs the copied tool server into `data/venvs/eo-gym`. Then start the server, with `src/agentic_evals/tasks/eo_gym/server` as the working directory:
-
-```bash
-data/venvs/eo-gym/bin/python -m eo_gym.server
-```
-
-`--skip-data` installs the virtualenv and leaves the archives alone. EO-Gym questions carry images, so a text-only model cannot read them. Pass `-T vision=false` to record those tasks as not applicable instead of scoring them.
+Model ids of the form `openai-api/<name>/<model>` read `<NAME>_API_KEY` and `<NAME>_BASE_URL` from `.env`, for example `OPENROUTER_API_KEY` or `EVE_API_KEY`.
 
 ## Run
 
+A run is a YAML file in `configs/<benchmark>/`: model, endpoint, task arguments, generation settings and samples. For example, [configs/earth_bench/qwen3_32b.yaml](configs/earth_bench/qwen3_32b.yaml) runs Qwen3-32B on five Earth-Bench Spectrum questions in the auto-planning regime:
+
 ```bash
-uv run inspect eval agentic_evals/earth_bench \
-  -T regime=ap -T modality=spectrum \
-  --model openai-api/openrouter/openai/gpt-4o-mini \
-  --model-base-url https://openrouter.ai/api/v1 \
-  -M strict_tools=false
-
-uv run inspect eval agentic_evals/geobenchx -T group=spatial \
-  --model openai-api/openrouter/openai/gpt-4o-mini \
-  --model-base-url https://openrouter.ai/api/v1 \
-  -M strict_tools=false \
-  --model-role grader=openai/gpt-4.1-2025-04-14
-
-uv run inspect eval agentic_evals/eo_gym \
-  --model openai-api/openrouter/<provider>/<vision-model> \
-  --model-base-url https://openrouter.ai/api/v1 \
-  -M strict_tools=false \
-  --model-role grader=openai/gpt-4.1-mini
+uv run inspect eval --run-config configs/earth_bench/qwen3_32b.yaml
 ```
 
-`-M strict_tools=false` is required. Inspect's OpenAI-compatible provider marks tools strict by default, and these tool schemas contain untyped arguments that strict mode rejects.
-
-Earth-Bench regimes are `ap` (the agent plans its own steps) and `if` (the question lists the steps). Report them separately. `--sample-id 1` runs one task. `--limit 10` runs the first ten.
-
-GeoBenchX `group` is `merge`, `process`, `spatial`, `heatmaps`, or `all`. The official score is an LLM judge of the whole solution. The judge model is the Inspect `grader` role. Record it with the result: scores are not comparable across judges. Step metrics (Tool-Any-Order, Tool-In-Order, Tool-Exact-Match, parameter accuracy) are computed as well and labeled as our addition.
+Write a new file for a new run rather than adding command-line flags. Then browse the log, or rescore it without calling the model again:
 
 ```bash
 uv run inspect view
 uv run inspect score logs/<run>.eval --scorer agentic_evals/earth_bench_scorer
 ```
-
-`inspect view` shows transcripts, the tool trace, and per-step scores. `inspect score` recomputes metrics from a saved log without calling the model again.
 
 ## Tests
 
@@ -127,40 +56,55 @@ uv sync --extra earth-bench --extra geobenchx --group dev
 uv run pytest
 ```
 
-Tests use the files committed in this repo. The EO-Gym comparison against `agent_passk.py` skips until the server virtualenv exists.
-
-## Weights & Biases
-
-Model logging is enabled in `pyproject.toml` and targets the Forge project `agentic_evals` (entity `LLM4EO`). A run is uploaded when `WANDB_API_KEY` and `WANDB_ENTITY` are set. Weave is off. The `.eval` log remains the source of truth.
-
-On the pod, `WANDB_BASE_URL` is `https://forge.coreweave.com/api/wandb`. The UI is `https://forge.coreweave.com/wandb`.
-
-To keep a local run off W&B: `WANDB_MODE=disabled`.
+Tests need no API key. The metric tests check our scorers against each benchmark's published results or reference code.
 
 ## Layout
 
 ```
+configs/<benchmark>/*.yaml          run configurations
+src/agentic_evals/agents/           LangGraph agents and the trace recorder
 src/agentic_evals/tasks/<benchmark>/
-  setup.py       that benchmark's download (and, for EO-Gym, its server virtualenv)
-  task.py        Inspect task
-  dataset.py     prompts and samples
-  data/          committed questions, gold, and the test split
-  prompts/       judge templates, when the benchmark has a judge
-  tools/         tool code and the MCP config that launches it
-  server/        EO-Gym only: the copied FastAPI tool server
-  metrics.py     metric functions
-  scorers.py     Inspect scorers
-  PORTING.md     what changed relative to upstream
-  LICENSE
-scripts/setup_benchmark.py    dispatch to one task's setup.py
-data/                         gitignored rasters, the Drive archive, and EO-Gym imagery
-logs/                         gitignored Inspect logs
+  task.py, dataset.py               the Inspect task and its samples
+  metrics.py, scorers.py            the paper's metrics
+  tools/                            the benchmark's tools, served over MCP
+  PORTING.md                        file-level changes from upstream
+docs/benchmark_changes.md           scoring changes from each original benchmark
+```
+
+Optional run logging to Weights & Biases is configured in `pyproject.toml`. It uploads only when `WANDB_API_KEY` and `WANDB_ENTITY` are set; `WANDB_MODE=disabled` keeps a run local.
+
+## Citations
+
+If you use these benchmarks, cite the original papers:
+
+```bibtex
+@inproceedings{feng2026earthagent,
+  title     = {Earth-Agent: Unlocking the Full Landscape of Earth Observation with Agents},
+  author    = {Feng, Peilin and Lv, Zhutao and Ye, Junyan and Wang, Xiaolei and Huo, Xinjie and Yu, Jinhua and Xu, Wanghan and Zhang, Wenlong and Bai, Lei and He, Conghui and Li, Weijia},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2026},
+  eprint    = {2509.23141},
+  archivePrefix = {arXiv}
+}
+
+@inproceedings{krechetova2025geobenchx,
+  title     = {GeoBenchX: Benchmarking LLMs in Agent Solving Multistep Geospatial Tasks},
+  author    = {Krechetova, Varvara and Kochedykov, Denis},
+  booktitle = {ACM SIGSPATIAL},
+  year      = {2025},
+  eprint    = {2503.18129},
+  archivePrefix = {arXiv}
+}
+
+@misc{ma2026eogym,
+  title     = {EO-Gym: A Multimodal, Interactive Environment for Earth Observation Agents},
+  author    = {Ma, Sai and Li, Zhuang and Li, Sichao and Xu, Xinyue and Zhu, Ruibiao and Boston, Tony and Taylor, John A.},
+  year      = {2026},
+  eprint    = {2605.01250},
+  archivePrefix = {arXiv}
+}
 ```
 
 ## Licenses
 
-Earth-Bench tool code is MIT, copyright OpenDataLab 2026 (`tasks/earth_bench/LICENSE`).
-
-GeoBenchX tool code and the copied task files are MIT, copyright Varvara Krechetova 2025 (`tasks/geobenchx/LICENSE`).
-
-EO-Gym code copied into this repository is CC-BY-4.0 (`tasks/eo_gym/LICENSE`). The image archives stay a download.
+Code copied from the benchmarks keeps its licence, in each task folder: Earth-Bench tools are MIT (OpenDataLab 2026), GeoBenchX tools and tasks are MIT (Varvara Krechetova 2025), and the EO-Gym server is CC-BY-4.0. Imagery and rasters stay a download.
