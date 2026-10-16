@@ -6,13 +6,15 @@ It runs agents on public EO agent benchmarks under the same conditions, records 
 
 ## Benchmarks
 
-| Benchmark | Task name | Metrics | Install |
-| --- | --- | --- | --- |
-| Earth-Bench ([Feng et al., ICLR 2026](https://arxiv.org/abs/2509.23141)) | `agentic_evals/earth_bench` | Accuracy; TAO, TIO, TEM, parameter accuracy, efficiency | `uv sync --extra earth-bench` |
-| GeoBenchX ([Krechetova & Kochedykov, SIGSPATIAL 2025](https://arxiv.org/abs/2503.18129)) | `agentic_evals/geobenchx` | LLM-judge match / partial / no match; length difference | `uv sync --extra geobenchx` |
-| EO-Gym ([Ma et al., 2026](https://arxiv.org/abs/2605.01250)) | `agentic_evals/eo_gym` | Pass@k with an LLM judge; tool metrics; parameters score | its own virtualenv, created by setup |
 
-Where we fix a known problem in an original benchmark, the change and its reason are in [docs/benchmark_changes.md](docs/benchmark_changes.md). Install one benchmark at a time: the extras pull different geospatial stacks into the same environment.
+| Benchmark                                                                                | Task name                   | Metrics                                                  | Install                              |
+| ---------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------ |
+| Earth-Bench ([Feng et al., ICLR 2026](https://arxiv.org/abs/2509.23141))                 | `agentic_evals/earth_bench` | Accuracy; TAO, TIO, TEM, parameter accuracy, efficiency  | `uv sync --extra earth-bench`        |
+| GeoBenchX ([Krechetova & Kochedykov, SIGSPATIAL 2025](https://arxiv.org/abs/2503.18129)) | `agentic_evals/geobenchx`   | LLM-judge match / partial / no match; length difference  | `uv sync --extra geobenchx`          |
+| EO-Gym ([Ma et al., 2026](https://arxiv.org/abs/2605.01250))                             | `agentic_evals/eo_gym`      | Pass@k with an LLM judge; tool metrics; parameters score | its own virtualenv, created by setup |
+
+
+For some benchmarks we could have done some changes in the porting, the change and its reason are in [docs/benchmark_changes.md](docs/benchmark_changes.md). Install one benchmark at a time: the extras pull different geospatial stacks into the same environment.
 
 ## Install
 
@@ -48,6 +50,8 @@ Write a new file for a new run rather than adding command-line flags. Then brows
 uv run inspect view
 uv run inspect score logs/<run>.eval --scorer agentic_evals/earth_bench_scorer
 ```
+
+
 
 ## Tests
 
@@ -104,6 +108,8 @@ If you use these benchmarks, cite the original papers:
   archivePrefix = {arXiv}
 }
 ```
+
+
 
 ## Licenses
 

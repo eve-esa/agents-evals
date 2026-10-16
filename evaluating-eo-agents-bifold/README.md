@@ -19,11 +19,15 @@ The notebook scores Earth-Bench with its published metrics, through the `agentic
 - How an LLM judge's verdict is reported together with the score
 - How to write a LangGraph agent and run it through the same harness
 
+
+
 ## Resources
 
 - `eval_agents_handson.ipynb`: the hands-on notebook
 - [agentic-evals](https://github.com/eve-esa/agents-evals): the evaluation harness the notebook uses
 - [Earth-Bench](https://arxiv.org/abs/2509.23141) (Feng et al., ICLR 2026): the benchmark scored in Part 3
+
+
 
 ## Folder Contents
 
@@ -46,61 +50,24 @@ The notebook scores Earth-Bench with its published metrics, through the `agentic
 
 During the workshop you receive a username and a password. Log in at [https://eo-agents-eval.lab.eve-chat.chat](https://eo-agents-eval.lab.eve-chat.chat) with those credentials. The lab already provides the environment and the kernel `agentic-evals workshop`, so you can go straight to [Run the Notebook](#run-the-notebook).
 
-The Prerequisites and Environment Setup sections below are only needed to run the material on your own machine.
-
-## Prerequisites
-
-- [uv](https://docs.astral.sh/uv/), used by `setup.sh`
-- A Jupyter environment: JupyterLab or VS Code notebooks
-- An EVE API key and endpoint for the model under test
-
-## Environment Setup
-
-This folder is a closed environment. It has its own virtualenv and its own `.env`, and it does not share the `.venv` of the agentic-evals checkout.
-
-From this folder:
-
-```bash
-bash setup.sh
-```
-
-`setup.sh` creates `.venv` with uv, installs `requirements.txt` (which includes `agentic-evals` with its Earth-Bench extra, from GitHub), registers the Jupyter kernel `agentic-evals workshop`, and copies `.env.example` to `.env` when `.env` is missing.
-
-The library is pinned in `requirements.txt` to the `feat/workshop-notebook` branch of `https://github.com/eve-esa/agents-evals`. The notebook's install cell is commented out, because the lab already provides the environment.
-
-Fill in `.env`:
-
-- `EVE_API_KEY`
-- `EVE_BASE_URL`
-- `MODEL_NAME` (the id the endpoint lists on `GET /models`)
-
-`WANDB_MODE=disabled` is set in `.env.example`, so a workshop run is not uploaded.
-
-Rasters download into `data/` the first time the notebook reaches that cell. Logs go to `logs/`, tool output to `runs/`. Those directories stay in this folder.
-
 ## Run the Notebook
 
-1. Open `eval_agents_handson.ipynb` and select the kernel `agentic-evals workshop`. On your own machine, start Jupyter with this folder as the working directory:
+Open `eval_agents_handson.ipynb` and select the kernel `agentic-evals workshop`:
 
-   ```bash
-   .venv/bin/jupyter notebook eval_agents_handson.ipynb
-   ```
-
-2. Run the cells in order. If you restart the kernel, run the setup cell again.
-3. The notebook has three parts:
-   - Part 1. Metrics for agents
-   - Part 2. EO benchmarks for agents
-   - Part 3. The evaluation framework, and a real Earth-Bench run
-4. The same baseline as a run config: `configs/earth_bench/workshop_eve.yaml` in the agentic-evals repository.
+1. Run the cells in order. If you restart the kernel, run the setup cell again.
+2. The notebook has three parts:
+  - Part 1. Metrics for agents
+  - Part 2. EO benchmarks for agents
+  - Part 3. The evaluation framework, and a real Earth-Bench run
+3. The same baseline as a run config: `configs/earth_bench/workshop_eve.yaml` in the agentic-evals repository.
 
 ## Troubleshooting
 
-- **`401` or `403` from the model**: check `EVE_API_KEY` and `EVE_BASE_URL` in `.env`.
-- **`404 model not found`**: check `MODEL_NAME`.
-- **`BudgetExceeded`**: the key's token budget is spent. Ask the organisers for a key with budget. A full pass of the notebook uses about 1.8M tokens.
-- **`RateLimitError` or HTTP 429**: the endpoint is busy. `run()` retries; if it persists, lower `max_samples`.
-- **Wrong kernel or `ModuleNotFoundError`**: select `agentic-evals workshop`, restart the kernel, and run the setup cell again.
-- **Many `tool_errors`**: read the trace with `show_trace`. Usually the model invented a file path.
+- `401` **or** `403` **from the model**: check `EVE_API_KEY` and `EVE_BASE_URL` in `.env`.
+- `404 model not found`: check `MODEL_NAME`.
+- `BudgetExceeded`: the key's token budget is spent. Ask the organisers for a key with budget. A full pass of the notebook uses about 1.8M tokens.
+- `RateLimitError` **or HTTP 429**: the endpoint is busy. `run()` retries; if it persists, lower `max_samples`.
+- **Wrong kernel or** `ModuleNotFoundError`: select `agentic-evals workshop`, restart the kernel, and run the setup cell again.
 
 ## Funding
 
@@ -121,3 +88,4 @@ If you use this material in academic or research settings, please cite:
       url={https://arxiv.org/abs/2604.13071}, 
 }
 ```
+
