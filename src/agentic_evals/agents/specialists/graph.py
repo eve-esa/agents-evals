@@ -99,7 +99,7 @@ when you ask again, or try another specialist.
 task asks for."""
 
 # Added after the describer's role prompt. It is the only reply rule the protocol needs:
-# the orchestrator reads the NEEDS_INPUT prefix as input-required (a2a.SubAgentExecutor).
+# the specialist's own A2A server reads the NEEDS_INPUT prefix as input-required (a2a.SubAgentExecutor).
 INPUT_PROMPT = f"""\
 If the request leaves out something you need, such as a file path, a band or a threshold, \
 reply with one line that starts with `{NEEDS_INPUT}` and names what is missing."""
