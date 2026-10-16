@@ -35,7 +35,6 @@ The notebook scores Earth-Bench with its published metrics, through the `agentic
 ├── figures/                    # figures used in the notebook
 ├── requirements.txt            # agentic-evals, pinned to a git branch
 ├── setup.sh                    # creates .venv, registers the kernel, copies .env
-├── sagemaker_on_start.sh       # optional SageMaker OnStart hook
 ├── .env.example                # credentials template, copied to .env
 ├── .env                        # your credentials (not committed)
 ├── data/                       # benchmark rasters, downloaded on first run
@@ -43,17 +42,23 @@ The notebook scores Earth-Bench with its published metrics, through the `agentic
 └── runs/                       # tool output
 ```
 
+## Access the Lab
+
+During the workshop you receive a username and a password. Log in at [https://eo-agents-eval.lab.eve-chat.chat](https://eo-agents-eval.lab.eve-chat.chat) with those credentials. The lab already provides the environment and the kernel `agentic-evals workshop`, so you can go straight to [Run the Notebook](#run-the-notebook).
+
+The Prerequisites and Environment Setup sections below are only needed to run the material on your own machine.
+
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/), used by `setup.sh`
-- A Jupyter environment: JupyterLab, VS Code notebooks, or a SageMaker notebook instance
+- A Jupyter environment: JupyterLab or VS Code notebooks
 - An EVE API key and endpoint for the model under test
 
 ## Environment Setup
 
 This folder is a closed environment. It has its own virtualenv and its own `.env`, and it does not share the `.venv` of the agentic-evals checkout.
 
-From this folder, on the SageMaker notebook instance:
+From this folder:
 
 ```bash
 bash setup.sh
@@ -71,28 +76,11 @@ Fill in `.env`:
 
 `WANDB_MODE=disabled` is set in `.env.example`, so a workshop run is not uploaded.
 
-### On a SageMaker notebook instance
-
-Keep this folder under `~/SageMaker`. That directory is the instance's persistent volume, so `.venv`, `.env`, `data/` and `runs/` survive a restart.
-
-To build the environment automatically when the instance starts, attach `sagemaker_on_start.sh` as an OnStart lifecycle configuration. From a machine with the AWS CLI (`base64 -w0` on Linux, `base64 -i` on macOS, both without a line break):
-
-```bash
-aws sagemaker create-notebook-instance-lifecycle-config \
-  --notebook-instance-lifecycle-config-name bifold-setup \
-  --on-start Content=$(base64 -w0 sagemaker_on_start.sh)
-aws sagemaker update-notebook-instance \
-  --notebook-instance-name <your-instance> \
-  --lifecycle-config-name bifold-setup    # the instance must be stopped
-```
-
-The hook starts `setup.sh` in the background and logs to `~/bifold-setup.log`. The first build takes several minutes and writes `.env` early. The kernel `agentic-evals workshop` appears in the launcher when `setup.sh` finishes.
-
 Rasters download into `data/` the first time the notebook reaches that cell. Logs go to `logs/`, tool output to `runs/`. Those directories stay in this folder.
 
 ## Run the Notebook
 
-1. Start Jupyter with this folder as the working directory, and select the kernel `agentic-evals workshop`:
+1. Open `eval_agents_handson.ipynb` and select the kernel `agentic-evals workshop`. On your own machine, start Jupyter with this folder as the working directory:
 
    ```bash
    .venv/bin/jupyter notebook eval_agents_handson.ipynb
