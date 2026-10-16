@@ -292,7 +292,118 @@ def inspect_task():
     (OUT / "inspect_task.svg").write_text(svg, encoding="utf-8")
 
 
+# Section 2.2: one row per benchmark of the section 2.1 table, one column per category.
+# A mark means the 2.1 table or the benchmark's paper states it; blank means not stated, not "no".
+AXES = [
+    ("Gold", ["Trajectory", "Plan", "Answer"]),
+    ("Vision", ["Images in prompt", "Images via tools", "No imagery"]),
+    ("Data", ["Optical", "SAR", "Multi/hyperspectral", "Infrared", "Vector GIS", "Weather grids", "Map services"]),
+    ("Agent acts by", ["Tool calls", "Code", "Web UI", "Plan only"]),
+    ("Scored by", ["Deterministic match", "Execution/state check", "LLM/VLM judge"]),
+    ("Other", ["Must reject/abstain", "Training split"]),
+]
+# name: (marks, availability, domain); availability is "public", "partial" (gated, planned, incomplete) or "none".
+BENCHMARKS = [
+    ("Earth-Bench", {"Trajectory", "Images via tools", "Multi/hyperspectral", "Tool calls", "Deterministic match"}, "public", "Remote sensing"),
+    ("GeoBenchX", {"Trajectory", "No imagery", "Vector GIS", "Tool calls", "LLM/VLM judge", "Must reject/abstain"}, "public", "GIS"),
+    ("EO-Gym", {"Trajectory", "Images in prompt", "Optical", "Tool calls", "LLM/VLM judge", "Must reject/abstain", "Training split"}, "public", "Remote sensing"),
+    ("ThinkGeo", {"Trajectory", "Images via tools", "Optical", "SAR", "Tool calls", "LLM/VLM judge"}, "public", "Remote sensing"),
+    ("OpenEarthAgent", {"Trajectory", "Tool calls", "Training split"}, "public", "Geospatial"),
+    ("GeoAgentBench", {"Trajectory", "Tool calls", "Deterministic match", "LLM/VLM judge"}, "public", "GIS/EO"),
+    ("TerraLogic", {"Trajectory", "Images via tools", "Optical", "SAR", "Infrared", "Tool calls", "LLM/VLM judge"}, "public", "Remote sensing"),
+    ("TerraBench", {"Trajectory", "Tool calls"}, "partial", "Earth science"),
+    ("DORA", {"Trajectory", "SAR", "Multi/hyperspectral", "Tool calls"}, "partial", "Disasters"),
+    ("GeoNatureAgent", {"Trajectory", "Tool calls", "Deterministic match"}, "public", "Environment"),
+    ("ShapefileGPT", {"Trajectory", "No imagery", "Vector GIS", "Tool calls"}, "none", "GIS"),
+    ("GeoJSON Agents", {"Trajectory", "No imagery", "Vector GIS", "Tool calls", "Code"}, "public", "GIS"),
+    ("GeoLLM-Engine", {"Trajectory", "Tool calls", "Web UI", "Execution/state check"}, "none", "Map copilot"),
+    ("GeoLLM-QA", {"Trajectory", "Web UI"}, "none", "Map copilot"),
+    ("RescueADI", {"Plan", "Answer", "Training split"}, "none", "Disasters"),
+    ("KnowFlow-Bench", {"Plan", "Tool calls"}, "none", "Remote sensing"),
+    ("GeoPlan-bench", {"Plan", "Plan only", "LLM/VLM judge"}, "public", "Remote sensing"),
+    ("DisasterBench", {"Plan", "Plan only", "Deterministic match"}, "public", "Disasters"),
+    ("UnivEARTH", {"Answer", "Code"}, "public", "Earth Engine"),
+    ("GeoCode-Bench", {"Answer", "Code"}, "none", "Geo code"),
+    ("GeoCode", {"Answer", "Code", "Execution/state check"}, "public", "Geo code"),
+    ("MapEval-API", {"Answer", "No imagery", "Map services", "Deterministic match"}, "public", "Maps and travel"),
+    ("OpenEarth-Bench", {"Answer", "Code"}, "none", "EO pipelines"),
+    ("GeoDisaster", {"Answer", "SAR"}, "none", "Disasters"),
+    ("MineBench", {"Answer", "Images in prompt", "Multi/hyperspectral"}, "none", "Geology"),
+    ("VagueEO", {"Answer", "Images in prompt", "Tool calls", "Training split"}, "none", "Remote sensing"),
+    ("AirSpatial-Bench", {"Answer", "Images in prompt", "Optical"}, "public", "Drones"),
+    ("AgroTools", {"Answer", "Images in prompt", "Optical"}, "partial", "Agriculture"),
+    ("AgriWorld", {"Answer", "Code"}, "none", "Agriculture"),
+    ("ZephyrusBench", {"Answer", "No imagery", "Weather grids", "Code"}, "public", "Weather"),
+    ("AgentCaster", {"Answer", "Weather grids", "Must reject/abstain"}, "public", "Weather"),
+    ("Climate-Agent-Bench-85", {"Answer", "Code"}, "none", "Climate"),
+    ("GCA-DS", {"Answer"}, "none", "Climate"),
+]
+
+AVAIL = {"public": dict(c=GREEN, edgecolors=GREEN), "partial": dict(c=AMBER, edgecolors=AMBER), "none": dict(c="white", edgecolors=GREY)}
+
+
+def benchmark_matrix():
+    """Section 2.2: the benchmarks of section 2.1 split along each axis, as one matrix."""
+    known = {c for _, cats in AXES for c in cats}
+    for name, marks, _, _ in BENCHMARKS:
+        assert marks <= known, (name, marks - known)
+
+    cols, groups, x = [], [], 0.0
+    for group, cats in AXES:
+        start = x
+        for cat in cats:
+            cols.append((x, cat))
+            x += 1.0
+        groups.append((group, start, x - 1.0))
+        x += 0.9
+    x_avail, x_domain = x + 0.2, x + 1.1
+    n = len(BENCHMARKS)
+    col_x = {cat: cx for cx, cat in cols}
+
+    fig, ax = plt.subplots(figsize=(12.5, 0.29 * n + 3.4))
+    ax.set_xlim(-6.2, x_domain + 4.2)
+    ax.set_ylim(n + 0.9, -9.9)
+    ax.axis("off")
+
+    ax.text(-6.2, -9.4, "Same 33 benchmarks, split along each axis", fontsize=13, fontweight="bold", va="center")
+    ax.text(-6.2, -8.75, "A mark means the section 2.1 table or the paper states it. A blank means not stated, not \"no\".",
+            fontsize=9, color=MUTED, va="center")
+
+    for group, x0, x1 in groups:
+        ax.text((x0 + x1) / 2, -7.55, group, ha="center", va="center", fontsize=9.5, fontweight="bold")
+        ax.plot([x0 - 0.3, x1 + 0.3], [-7.2, -7.2], color=INK, lw=1.0)
+    for cx, cat in cols:
+        ax.text(cx, -0.75, cat, rotation=55, ha="left", va="bottom", fontsize=8.5, color=MUTED, rotation_mode="anchor")
+    ax.text(x_avail, -0.75, "Public data", rotation=55, ha="left", va="bottom", fontsize=8.5, color=MUTED, rotation_mode="anchor")
+    ax.text(x_domain - 0.3, -0.75, "Domain", ha="left", va="bottom", fontsize=8.5, color=MUTED)
+
+    gold_start = {}
+    for i, (name, marks, avail, domain) in enumerate(BENCHMARKS):
+        if i % 2 == 0:
+            ax.add_patch(Rectangle((-6.2, i - 0.5), x_domain + 10.4, 1.0, fc=CARD, ec="none", zorder=0))
+        ax.text(-0.6, i, name, ha="right", va="center", fontsize=9)
+        for cat in marks:
+            ax.scatter(col_x[cat], i, s=70, c=BLUE, edgecolors="none", zorder=3)
+        ax.scatter(x_avail, i, s=70, linewidths=1.1, zorder=3, **AVAIL[avail])
+        ax.text(x_domain - 0.3, i, domain, ha="left", va="center", fontsize=8.5, color=MUTED)
+        first = "Trajectory" if "Trajectory" in marks else ("Plan" if "Plan" in marks else "Answer")
+        gold_start.setdefault(first, i)
+    for row in (gold_start["Plan"], gold_start["Answer"]):
+        ax.plot([-6.2, x_domain + 4.2], [row - 0.5, row - 0.5], color=RULE, lw=1.0, zorder=1)
+    for _, x0, _ in groups[1:]:
+        ax.plot([x0 - 0.95, x0 - 0.95], [-0.5, n - 0.5], color=RULE, lw=0.8, zorder=1)
+
+    legend_y = n + 0.45
+    for k, (label, avail) in enumerate([("public", "public"), ("gated, planned or incomplete", "partial"), ("not public", "none")]):
+        lx = [0.0, 3.5, 12.5][k]
+        ax.scatter(lx, legend_y, s=60, linewidths=1.1, zorder=3, **AVAIL[avail])
+        ax.text(lx + 0.4, legend_y, label, va="center", fontsize=8.5, color=MUTED)
+    fig.savefig(OUT / "benchmark_matrix.png", dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
+    benchmark_matrix()
     pass_at_k_tree()
     inspect_task()
     run_anatomy()
