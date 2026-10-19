@@ -347,12 +347,46 @@ def _tile_html(code: str, label: str, value: float) -> str:
     )
 
 
-def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: str = "") -> str:
+def _final_answer_html(answer: str, gold: str | None) -> str:
+    """The model's extracted choice, coloured by whether it equals the gold answer."""
+    import html
+
+    shown = answer.strip() or "\u2014"
+    gold_text = gold.strip() if gold else ""
+    if gold_text:
+        colour = "#2ea043" if shown == gold_text else "#f85149"
+        note = f"<span style='font-size:11px;font-weight:400;opacity:.65'> gold {html.escape(gold_text)}</span>"
+    else:
+        colour, note = "inherit", ""
+    return (
+        "<div style='flex:1 1 140px;border:1px solid rgba(128,128,128,.35);border-radius:8px;padding:6px 10px'>"
+        "<div style='font-size:11px;opacity:.7'>Final answer</div>"
+        f"<div style='font-size:20px;font-weight:700;line-height:1.2;color:{colour}'>{html.escape(shown)}{note}</div></div>"
+    )
+
+
+def compare_html(
+    pred: list[dict[str, Any]],
+    gold: list[dict[str, Any]],
+    title: str = "",
+    *,
+    accuracy: float | None = None,
+    answer: str | None = None,
+    gold_answer: str | None = None,
+) -> str:
     """Expert and agent tool calls side by side, one row per position, with the Earth-Bench scores.
 
     Rows are aligned by position, the way Earth-Bench's TEM and ParamAcc line
     steps up. A call is ``{"name": ..., "input": {...}}``. The scores come from
     ``agentic_evals.tasks.earth_bench.metrics``, the same functions the scorer uses.
+
+    ``accuracy``, ``answer`` and ``gold_answer`` come from a scored sample.
+    ``answer`` is the choice ``earth_bench_scorer`` extracted from the model's
+    completion; ``accuracy`` is 1 when that choice equals the gold answer
+    (Feng et al., ICLR 2026, arXiv:2509.23141, Appendix B.2). Pass them only
+    for a scored run. The metric lesson and the parameter-rule panel have no
+    answer, so they omit them and those tiles are left out. NaN accuracy is
+    treated as absent.
     """
     import html
 
@@ -388,6 +422,10 @@ def compare_html(pred: list[dict[str, Any]], gold: list[dict[str, Any]], title: 
         metrics.parameter_accuracy(pred, gold),
     )
     tiles = "".join(_tile_html(code, label, value) for (code, label), value in zip(_TILES, values))
+    if accuracy is not None and accuracy == accuracy:
+        tiles = _tile_html("Acc", "Answer accuracy", float(accuracy)) + tiles
+    if answer is not None:
+        tiles = _final_answer_html(answer, gold_answer) + tiles
     legend = " ".join(
         f"<span style='margin-right:10px;white-space:nowrap'><span style='display:inline-block;width:10px;height:10px;"
         f"border-radius:5px;background:{colour};margin-right:4px'></span>{label}</span>"
@@ -530,6 +568,49 @@ def sample_calls(sample: Any) -> list[dict[str, Any]]:
     from agentic_evals.agents.trace_callback import read_trace
 
     return [{"name": e["name"], "input": e["input"]} for e in read_trace(sample.store)]
+
+
+def sample_accuracy(sample: Any) -> float | None:
+    """Final-answer accuracy recorded by ``earth_bench_scorer``, or None when it is absent.
+
+    The value is the scorer's ``accuracy`` (exact match of the extracted choice;
+    Feng et al., ICLR 2026, arXiv:2509.23141, Appendix B.2). NaN means the sample
+    was left unscored, so the trace view omits the tile.
+    """
+    earth = (getattr(sample, "scores", None) or {}).get("earth_bench_scorer")
+    value = getattr(earth, "value", None)
+    if not isinstance(value, dict) or "accuracy" not in value:
+        return None
+    accuracy = float(value["accuracy"])
+    if accuracy != accuracy:
+        return None
+    return accuracy
+
+
+def sample_final_answer(sample: Any) -> tuple[str | None, str | None]:
+    """The model's extracted final answer and the gold answer, or None when absent.
+
+    The model answer is ``earth_bench_scorer``'s ``answer``: the choice
+    ``extract_answer`` pulled from the completion (Feng et al., ICLR 2026,
+    arXiv:2509.23141, Appendix B.2). The gold answer is the sample target.
+    """
+    earth = (getattr(sample, "scores", None) or {}).get("earth_bench_scorer")
+    answer = getattr(earth, "answer", None) if earth is not None else None
+    if not answer and earth is not None:
+        answer = (getattr(earth, "metadata", None) or {}).get("extracted_answer")
+    if not answer:
+        completion = getattr(getattr(sample, "output", None), "completion", None)
+        if completion:
+            from agentic_evals.tasks.earth_bench.metrics import extract_answer
+
+            answer = extract_answer(completion)
+    target = getattr(sample, "target", None)
+    gold = getattr(target, "text", target) if target is not None else None
+    if isinstance(gold, (list, tuple)):
+        gold = gold[0] if gold else None
+    answer_text = str(answer).strip() if answer else None
+    gold_text = str(gold).strip() if gold else None
+    return answer_text, gold_text
 
 
 METRIC_ROWS: tuple[tuple[str, str, str], ...] = (

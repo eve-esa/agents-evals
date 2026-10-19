@@ -160,6 +160,34 @@ def test_check_budget_raises_on_a_spent_quota(monkeypatch):
     workshop.check_budget()
 
 
+def test_sample_accuracy_reads_the_scorer_and_skips_a_missing_one():
+    from workshop import sample_accuracy
+
+    scored = SimpleNamespace(scores={"earth_bench_scorer": SimpleNamespace(value={"accuracy": 1.0})})
+    assert sample_accuracy(scored) == 1.0
+    assert sample_accuracy(SimpleNamespace(scores={})) is None
+    unscored = SimpleNamespace(scores={"earth_bench_scorer": SimpleNamespace(value={"accuracy": float("nan")})})
+    assert sample_accuracy(unscored) is None
+
+
+def test_sample_final_answer_reads_the_extracted_choice_and_the_target():
+    from workshop import sample_final_answer
+
+    scored = SimpleNamespace(
+        scores={"earth_bench_scorer": SimpleNamespace(answer="C", metadata={})},
+        output=None,
+        target="C",
+    )
+    assert sample_final_answer(scored) == ("C", "C")
+    from_text = SimpleNamespace(
+        scores={},
+        output=SimpleNamespace(completion="The share is 49.7, so <Answer>B</Answer>."),
+        target=SimpleNamespace(text="A"),
+    )
+    assert sample_final_answer(from_text) == ("B", "A")
+    assert sample_final_answer(SimpleNamespace(scores={}, output=None, target=None)) == (None, None)
+
+
 def test_compare_html_marks_each_step_and_reports_the_scores():
     from workshop import compare_html
 
@@ -175,6 +203,18 @@ def test_compare_html_marks_each_step_and_reports_the_scores():
     assert page.count("justify-content:center'>") == 4
     assert "0.33" in page and "agent vs 3 expert" in page
     assert "(expert: 310.0)" in page
+    assert "Answer accuracy" not in page
+    wrong = compare_html(pred, gold, "run e", accuracy=0.0)
+    right = compare_html(pred, gold, "run e", accuracy=1.0)
+    tile = "Answer accuracy</div><div style='font-size:20px;font-weight:700;line-height:1.2'>"
+    assert tile + "0.00" in wrong and tile + "1.00" in right
+    assert "Answer accuracy" not in compare_html(pred, gold, accuracy=float("nan"))
+    assert "Final answer" not in page
+    matched = compare_html(pred, gold, answer="C", gold_answer="C")
+    missed = compare_html(pred, gold, answer="B", gold_answer="C")
+    assert "Final answer" in matched and "'>C<span" in matched and "gold C" in matched and "color:#2ea043" in matched
+    assert "'>B<span" in missed and "gold C" in missed and "color:#f85149" in missed
+    assert "&lt;b&gt;" in compare_html(pred, gold, answer="<b>", gold_answer="C")
 
 
 def test_rules_html_scores_one_run_under_both_parameter_rules():
