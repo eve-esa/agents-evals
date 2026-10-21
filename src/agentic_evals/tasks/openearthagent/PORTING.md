@@ -37,4 +37,4 @@ Scores are for this proxy and this reimplementation, not for the authors' three 
 - **Controller timeouts** use httpx, not `SIGALRM`. The client does not trust env proxies, matching upstream `disable_proxy`.
 - **Image directory.** Upstream `config.yaml` says `data/test_images`. This package stores the Hugging Face `test/` folder at `data/openearthagent/test`.
 
-Benchmark notes stay in this file. `AGENTS.md` is the short rules file and does not get a per-benchmark section.
+Benchmark notes stay in this file.
